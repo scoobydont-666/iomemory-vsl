@@ -1,4 +1,19 @@
 #!/usr/bin/env bash
+#
+# objtool wrapper.
+#
+# task-15303: this script used to end in an unconditional `exit 0`, which
+# swallowed EVERY objtool failure. On 2026-08-04 that turned a hard build
+# failure into a module that installed cleanly and then panicked the kernel at
+# boot (jump_label BUG, see the objtool_perfile target in Makefile). Silence is
+# the bug: a build that cannot validate its output must say so.
+#
+# Kernel 7.x runs objtool once over the LINKED module object, which drags the
+# proprietary libkfio blob into scope. The blob contains code with no
+# symbol-table entry, so objtool legitimately cannot reason about it and emits
+# "unannotated intra-function call". That single failure mode is EXPECTED and
+# tolerated -- first-party objects are validated and jump-label-converted by the
+# per-file pass in the Makefile. Anything else is a real failure and is fatal.
 
 KERNEL_BUILD=$objtree
 [ -z "$KERNEL_BUILD" ] && echo "we need KERNEL_BUILD set: $KERNEL_BUILD" && exit 1
@@ -10,8 +25,29 @@ if [ -z "$objtool" ]; then
     exit 255;
 fi
 [ "$DEBUG" != "" ] && echo "Running objtool $objtool $args"
-$objtool --sec-address $args
-rc=$?
-[ "$DEBUG" != "" ] && echo "objtool returned $rc"
-exit 0
 
+out=$($objtool --sec-address $args 2>&1)
+rc=$?
+[ -n "$out" ] && echo "$out" 1>&2
+[ "$DEBUG" != "" ] && echo "objtool returned $rc"
+
+[ $rc -eq 0 ] && exit 0
+
+# Tolerate ONLY the known libkfio blob limitation; fail loudly on anything else.
+if echo "$out" | grep -q "unannotated intra-function call"; then
+    unexpected=$(echo "$out" | grep -v "unannotated intra-function call" \
+                             | grep -iE "error|warning" | head -5)
+    if [ -z "$unexpected" ]; then
+        echo "objtool_wrapper: tolerated known libkfio blob limitation (task-15303);" \
+             "first-party objects are validated by the per-file pass" 1>&2
+        exit 0
+    fi
+    echo "objtool_wrapper: FATAL - objtool reported problems beyond the known" \
+         "blob limitation:" 1>&2
+    echo "$unexpected" 1>&2
+    exit $rc
+fi
+
+echo "objtool_wrapper: FATAL - objtool failed (rc=$rc) with no recognised" \
+     "blob limitation; refusing to produce an unvalidated module" 1>&2
+exit $rc
