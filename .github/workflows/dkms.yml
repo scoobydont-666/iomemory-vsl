@@ -1,0 +1,47 @@
+name: DKMS lifecycle
+on:
+  pull_request:
+    paths:
+      - 'Makefile'
+      - 'root/usr/src/**'
+      - 'tests/test_dkms.py'
+      - '.github/workflows/dkms.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: dkms-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  dkms:
+    # Public PR code must not run on a persistent/self-hosted storage machine.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Offline lifecycle and failure-path tests
+        run: python3 -m unittest discover -s tests -p 'test_dkms.py' -v
+      - name: Install DKMS and two header families (no kernel images)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential dkms linux-headers-generic linux-headers-generic-hwe-24.04
+      - name: Real registration, repeat install and second-kernel autoinstall
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t kernels < <(find /usr/src -maxdepth 1 -type d -name 'linux-headers-*-generic' -printf '%f\n' | sed 's/^linux-headers-//' | sort -V)
+          test "${#kernels[@]}" -ge 2
+          first=${kernels[0]}
+          second=${kernels[${#kernels[@]}-1]}
+          test "$first" != "$second"
+          sudo make dkms KERNELVER="$first"
+          sudo make dkms KERNELVER="$first"
+          first_version=$(modinfo -k "$first" -F version iomemory-vsl)
+          cd "$RUNNER_TEMP"
+          sudo dkms autoinstall -k "$second"
+          dkms status -m iomemory-vsl -k "$second" | grep -E ': installed$'
+          test "$(modinfo -k "$second" -F vermagic iomemory-vsl | awk '{print $1}')" = "$second"
+          test "$(modinfo -k "$second" -F version iomemory-vsl)" = "$first_version"
+          # Do not load/unload modules, attach/format devices, or reboot.
