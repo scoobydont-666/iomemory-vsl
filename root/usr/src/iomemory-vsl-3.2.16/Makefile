@@ -52,8 +52,8 @@ CCMAJOR ?= $(shell echo __GNUC__ | $(FIOCC) -E -xc - | tail -n 1)
 CCMINOR ?= $(shell echo __GNUC_MINOR__ | $(FIOCC) -E -xc - | tail -n 1)
 CCVER=$(CCMAJOR)$(CCMINOR)
 LAST_CCVER := $(shell ls -1 kfio | sed -n 's/.*_cc\([0-9][0-9]*\)_.*/\1/p' | tail -1)
-# Get the tag and push it in here too.... if not too long...
-MODULE_VERSION ?= $(shell git rev-parse --short HEAD)
+# DKMS builds a source snapshot without .git; retain its exact source identity.
+MODULE_VERSION ?= $(shell if [ -r .source-revision ]; then cat .source-revision; else git rev-parse --short HEAD; fi)
 
 TARGET ?= $(FIOARCH)_cc$(CCMAJOR)$(CCMINOR)
 
@@ -108,16 +108,21 @@ check_target_kernel:
 
 .PHONY: add_module_version patch_module_version
 add_module_version patch_module_version:
+ifneq ($(DKMS_KERNEL_VERSION),)
+	@test -n "$(MODULE_VERSION)" || { echo 'Missing source revision; use make dkms from a clean checkout' >&2; exit 1; }
+	@printf '#include "linux/module.h"\nMODULE_LICENSE("GPL");\nMODULE_VERSION("%s");\n' "$(MODULE_VERSION)" > license.c
+else
 	@ret="$$("$(shell pwd)"/module_operations.sh -n "$(FIO_DRIVER_NAME)" -v "$(MODULE_VERSION)")" ; \
 	if [ -n "$$ret" ] ; then \
 		echo "" ; \
 		echo ""$$ret"" ; \
 		echo "" ; \
 	fi
+endif
 
 .PHONY: dkms
 dkms:
-	sudo ./module_operations.sh -n "$(FIO_DRIVER_NAME)" -v "$(MODULE_VERSION)" -l ${LAST_KFIO_LIB} -d
+	cd "$$(git rev-parse --show-toplevel)" && $(MAKE) dkms
 
 .PHONY: dpkg
 dpkg:

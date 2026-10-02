@@ -6,9 +6,8 @@ FIO_DIR = $(shell git rev-parse --show-toplevel)
 all: help
 
 .PHONY: dkms
-dkms: clean
-	cd ${FIO_SRC_DIR} && \
-		$(MAKE) dkms
+dkms:
+	bash scripts/install-dkms.sh $(DKMS_ARGS)
 
 .PHONY: dpkg
 dpkg: clean patch_module_version
