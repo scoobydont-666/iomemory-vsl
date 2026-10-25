@@ -4,7 +4,7 @@ on:
     paths:
       - 'Makefile'
       - 'root/usr/src/**'
-      - 'tests/test_dkms.py'
+      - 'tests/**'
       - '.github/workflows/dkms.yml'
   workflow_dispatch:
 permissions:
@@ -22,7 +22,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Offline lifecycle and failure-path tests
-        run: python3 -m unittest discover -s tests -p 'test_dkms.py' -v
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
       - name: Install DKMS and two header families (no kernel images)
         run: |
           sudo apt-get update
