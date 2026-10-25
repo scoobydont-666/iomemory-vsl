@@ -536,10 +536,28 @@ int kfio_pci_request_regions(kfio_pci_dev_t *pdev, const char *res_name)
 
 int kfio_pci_set_dma_mask(kfio_pci_dev_t *pdev, uint64_t mask)
 {
+    struct device *dev = &((struct pci_dev *)pdev)->dev;
+    u64 effective_mask = DMA_BIT_MASK(32);
     int ret;
-    /* Force 32-bit DMA mask - ioDrive2 cannot DMA above 4GB on dual-EPYC */
-    ret = dma_set_mask(&((struct pci_dev *)pdev)->dev, DMA_BIT_MASK(32));
-    dma_set_coherent_mask(&((struct pci_dev *)pdev)->dev, DMA_BIT_MASK(32));
+
+    /*
+     * ioDrive2 / ioScale2 hardware DMA descriptors and EB-scan buffers require
+     * 32-bit (<4 GiB) DMA addresses on dual-socket NUMA topologies. Clamp any
+     * wider requested mask to 32 bits while honoring narrower masks, and check
+     * both streaming and coherent mask results explicitly.
+     */
+    if (mask != 0 && mask < effective_mask)
+    {
+        effective_mask = mask;
+    }
+
+    ret = dma_set_mask_and_coherent(dev, effective_mask);
+    if (ret)
+    {
+        errprint("%s: failed to set DMA and coherent mask 0x%llx (err=%d)\n",
+                 pci_name((struct pci_dev *)pdev),
+                 (unsigned long long)effective_mask, ret);
+    }
     return ret;
 }
 
@@ -573,38 +591,63 @@ void *kfio_pci_get_drvdata(kfio_pci_dev_t *pdev)
 void noinline *kfio_dma_alloc_coherent(kfio_pci_dev_t *pdev, unsigned int size,
                                        struct fusion_dma_t *dma_handle)
 {
-    /* _fio_dma32_pin: ioDrive2 is 32-bit DMA; on dual-EPYC the socket-1 NUMA node has
-     * no sub-4GB (DMA32) memory, and dma_alloc_coherent's dma_direct path adds
-     * __GFP_THISNODE -> never falls back to node-0 DMA32 -> buffer lands >4GB,
-     * unreachable by the card -> attach EINVAL. Hard-pin to node-0 ZONE_DMA32. */
-    struct device *_d = &((struct pci_dev *)pdev)->dev;
-    unsigned int _order = get_order(size);
-    struct page *_pg;
-    void *_v;
-    dma_addr_t _da;
+    /*
+     * Allocate genuine coherent DMA memory (do not substitute streaming page
+     * mappings for coherent rings) while ensuring the allocation lands in
+     * ZONE_DMA32 (<4 GiB) even when the PCIe root port is attached to a
+     * non-zero NUMA node whose local memory starts above 4 GiB.
+     */
+    struct pci_dev *pci_dev = (struct pci_dev *)pdev;
+    struct device *dev = &pci_dev->dev;
+    dma_addr_t dma_addr = 0;
+    void *vaddr;
+    int orig_node;
 
     FUSION_ALLOCATION_TRIPWIRE_TEST();
 
-    _pg = alloc_pages_node(0, GFP_KERNEL | __GFP_DMA32 | __GFP_ZERO | __GFP_NOWARN, _order);
-    if (!_pg)
-        return NULL;
-    _v = page_address(_pg);
-    _da = dma_map_page(_d, _pg, 0, size, DMA_BIDIRECTIONAL);
-    if (dma_mapping_error(_d, _da)) {
-        __free_pages(_pg, _order);
+    if (!pdev || !dma_handle || size == 0)
+    {
         return NULL;
     }
-    if (_da > DMA_BIT_MASK(32)) {
-        printk(KERN_WARNING "fio _fio_dma32_pin: %s phys=%llx STILL >4GB\n",
-               pci_name((struct pci_dev *)pdev), (unsigned long long)_da);
-        dma_unmap_page(_d, _da, size, DMA_BIDIRECTIONAL);
-        __free_pages(_pg, _order);
+
+    memset(dma_handle, 0, sizeof(*dma_handle));
+
+    /*
+     * On multi-socket systems where socket > 0 has no ZONE_DMA32 pages,
+     * dma_direct_alloc() honors dev_to_node(dev) first. Temporarily route the
+     * coherent allocation through node 0 if the device is bound to a non-zero
+     * NUMA node so the kernel coherent allocator draws from node-0 ZONE_DMA32.
+     */
+    orig_node = dev_to_node(dev);
+    if (orig_node > 0 && node_online(0))
+    {
+        set_dev_node(dev, 0);
+    }
+
+    vaddr = dma_alloc_coherent(dev, size, &dma_addr,
+                               GFP_KERNEL | __GFP_DMA32 | __GFP_NOWARN);
+
+    if (orig_node > 0 && node_online(0))
+    {
+        set_dev_node(dev, orig_node);
+    }
+
+    if (!vaddr)
+    {
         return NULL;
     }
-    printk(KERN_INFO "fio _fio_dma32_pin: %s node=%d size=%u phys=%llx\n",
-           pci_name((struct pci_dev *)pdev), dev_to_node(_d), size, (unsigned long long)_da);
-    dma_handle->phys_addr = _da;
-    return _v;
+
+    if ((uint64_t)dma_addr > DMA_BIT_MASK(32) ||
+        ((uint64_t)dma_addr + (uint64_t)size - 1ULL) > DMA_BIT_MASK(32))
+    {
+        errprint("%s: coherent DMA allocation (size=%u, dma_addr=0x%llx) exceeded 32-bit boundary\n",
+                 pci_name(pci_dev), size, (unsigned long long)dma_addr);
+        dma_free_coherent(dev, size, vaddr, dma_addr);
+        return NULL;
+    }
+
+    dma_handle->phys_addr = (uint64_t)dma_addr;
+    return vaddr;
 }
 
 /**
@@ -613,9 +656,14 @@ void noinline *kfio_dma_alloc_coherent(kfio_pci_dev_t *pdev, unsigned int size,
 void noinline kfio_dma_free_coherent(kfio_pci_dev_t *pdev, unsigned int size,
                                      void *vaddr, struct fusion_dma_t *dma_handle)
 {
-    struct device *_d = &((struct pci_dev *)pdev)->dev;
-    dma_unmap_page(_d, (dma_addr_t) dma_handle->phys_addr, size, DMA_BIDIRECTIONAL);
-    __free_pages(virt_to_page(vaddr), get_order(size));
+    if (!pdev || !vaddr || !dma_handle || size == 0)
+    {
+        return;
+    }
+
+    dma_free_coherent(&((struct pci_dev *)pdev)->dev, size, vaddr,
+                      (dma_addr_t)dma_handle->phys_addr);
+    dma_handle->phys_addr = 0;
 }
 
 /*

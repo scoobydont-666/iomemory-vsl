@@ -50,17 +50,41 @@
  * requested, place the size in the first four bytes, and return the pointer
  * to (ptr_from_alloc + wordsize).
  */
+#define KFIO_DMA32_HDR_MAGIC 0x46494f32U /* 'FIO2' */
+#define KFIO_DMA32_HDR_BYTES 16UL
+
+#if defined(MAX_PAGE_ORDER)
+#define KFIO_MAX_PAGE_ORDER MAX_PAGE_ORDER
+#elif defined(MAX_ORDER)
+#define KFIO_MAX_PAGE_ORDER MAX_ORDER
+#else
+#define KFIO_MAX_PAGE_ORDER 10U
+#endif
+
+#define KFIO_DMA32_MAX_BYTES ((FUSION_PAGE_SIZE << (KFIO_MAX_PAGE_ORDER - 1U)) - KFIO_DMA32_HDR_BYTES)
+
+struct kfio_dma32_alloc_hdr
+{
+    uint32_t magic;
+    uint32_t order;
+    uint64_t requested_size;
+};
+
+C_ASSERT(sizeof(struct kfio_dma32_alloc_hdr) == KFIO_DMA32_HDR_BYTES);
+
 static void *__kfio_malloc(fio_size_t size, gfp_t gfp, kfio_numa_node_t node)
 {
     // This has been determined to be a place to put this injector agent, but there are compile problems.
     // Apparently fio-port.ko cannot find the error_injection_agents.o file.
     // task-10911: NUMA1 ioScale2 cards require DMA32 (<4GB) buffers. kmalloc ignores
     // __GFP_DMA32 (no dma32 slab cache); the page allocator honors it. Allocate via
-    // alloc_pages_node(__GFP_DMA32), stash the page order in an 8-byte header (keeps
-    // the payload >=8B aligned for DMA) so kfio_free can release the exact pages.
-    struct page *_pg;
-    unsigned int *_hdr;
-    unsigned int _order;
+    // alloc_pages_node(__GFP_DMA32) with overflow/order bounds checks and a 16-byte
+    // aligned header so the returned payload preserves 16-byte DMA alignment.
+    struct page *pg;
+    struct kfio_dma32_alloc_hdr *hdr;
+    unsigned int order;
+    fio_size_t total_bytes;
+    int target_node;
 
 #if 0   //ENABLE_ERROR_INJECTION
     if(inject_hard_alloc_error())
@@ -69,15 +93,43 @@ static void *__kfio_malloc(fio_size_t size, gfp_t gfp, kfio_numa_node_t node)
 
     FUSION_ALLOCATION_TRIPWIRE_TEST();
 
-    _order = get_order(size + 8);
-    _pg = alloc_pages_node(node == -1 ? 0 : node,
-                           gfp | __GFP_DMA32 | __GFP_ZERO | __GFP_NOWARN,
-                           _order);
-    if (!_pg)
+    if (size == 0 || size > KFIO_DMA32_MAX_BYTES)
+    {
         return NULL;
-    _hdr = (unsigned int *)page_address(_pg);
-    *_hdr = _order;
-    return (void *)((char *)_hdr + 8);
+    }
+
+    total_bytes = size + KFIO_DMA32_HDR_BYTES;
+    if (total_bytes < size)
+    {
+        return NULL;
+    }
+
+    order = get_order(total_bytes);
+    if (order >= KFIO_MAX_PAGE_ORDER)
+    {
+        return NULL;
+    }
+
+    target_node = (node < 0 || !node_online(node)) ? 0 : node;
+    pg = alloc_pages_node(target_node,
+                          gfp | __GFP_DMA32 | __GFP_ZERO | __GFP_NOWARN,
+                          order);
+    if (!pg && target_node != 0)
+    {
+        pg = alloc_pages_node(0,
+                              gfp | __GFP_DMA32 | __GFP_ZERO | __GFP_NOWARN,
+                              order);
+    }
+    if (!pg)
+    {
+        return NULL;
+    }
+
+    hdr = (struct kfio_dma32_alloc_hdr *)page_address(pg);
+    hdr->magic = KFIO_DMA32_HDR_MAGIC;
+    hdr->order = order;
+    hdr->requested_size = (uint64_t)size;
+    return (void *)((char *)hdr + KFIO_DMA32_HDR_BYTES);
 }
 
 /**
@@ -119,13 +171,32 @@ void *kfio_malloc_atomic_node(fio_size_t size, kfio_numa_node_t node)
  */
 void noinline kfio_free(void *ptr, fio_size_t size)
 {
-    unsigned int *_hdr;
+    struct kfio_dma32_alloc_hdr *hdr;
+    unsigned int order;
     (void) size;
 
     if (!ptr)
+    {
         return;
-    _hdr = (unsigned int *)((char *)ptr - 8);
-    __free_pages(virt_to_page(_hdr), *_hdr);
+    }
+
+    if (((fio_uintptr_t)ptr & (KFIO_DMA32_HDR_BYTES - 1UL)) != 0)
+    {
+        errprint("kfio_free: unaligned pointer %p refused\n", ptr);
+        return;
+    }
+
+    hdr = (struct kfio_dma32_alloc_hdr *)((char *)ptr - KFIO_DMA32_HDR_BYTES);
+    if (hdr->magic != KFIO_DMA32_HDR_MAGIC || hdr->order >= KFIO_MAX_PAGE_ORDER)
+    {
+        errprint("kfio_free: invalid header magic=0x%x order=%u for ptr=%p\n",
+                 hdr->magic, hdr->order, ptr);
+        return;
+    }
+
+    order = hdr->order;
+    hdr->magic = 0;
+    __free_pages(virt_to_page(hdr), order);
 }
 KFIO_EXPORT_SYMBOL(kfio_free);
 
