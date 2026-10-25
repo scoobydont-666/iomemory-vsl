@@ -6,7 +6,7 @@ FIO_DIR = $(shell git rev-parse --show-toplevel)
 all: help
 
 .PHONY: dkms
-dkms: clean
+dkms:
 	cd ${FIO_SRC_DIR} && \
 		$(MAKE) dkms
 

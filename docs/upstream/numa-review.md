@@ -1,0 +1,10 @@
+## Follow-up review: scope and integration requirements
+
+The historical dual-socket ioScale2 attach recovery remains useful evidence for the tested configuration. It should not be presented as a general DMA portability or sustained I/O-integrity qualification. At head `02bed906ee4d3531c61d7ae52231c8c67c5169d2`, these points require resolution before broader integration:
+
+1. `kfio_dma_alloc_coherent()` substitutes `alloc_pages_node()` plus `dma_map_page(..., DMA_BIDIRECTIONAL)` for `dma_alloc_coherent()`. A streaming mapping is not a general substitute for the coherent allocation contract. Preserve coherent semantics or justify and enforce a supported-platform restriction and the complete synchronization/ownership model. See https://docs.kernel.org/core-api/dma-api-howto.html#types-of-dma-mappings and its streaming synchronization section.
+2. `kfio_pci_set_dma_mask()` ignores its requested mask, fixes both masks at 32 bits and does not report the coherent-mask result. Scope the policy to established device capabilities and handle failures explicitly.
+3. `__kfio_malloc()` changes every allocation through that helper to DMA32 page allocation with an eight-byte prefix, not only the reported scan buffer. Bound `size + 8` and the allocation order; audit matching frees, alignment assumptions and atomic-allocation callers; test DMA32 pressure and fragmentation.
+4. Preserve the original kernel-6.17 attach/reload evidence as historical, contributor-reported evidence. Add exact-head builds and representative non-destructive hardware qualification, including checksummed I/O on disposable test storage and controlled reboot verification. Do not treat a successful kernel-7 build as a successful module load.
+
+DKMS lifecycle hardening is isolated from this data-path contribution, so packaging improvements do not implicitly approve the allocator policy. The newer kernel-7 objtool branch also needs separate review of suppressed errors and manual/DKMS target parity. No merge or deployment is requested by this comment.

@@ -107,6 +107,17 @@ check_target_kernel:
 	fi
 
 .PHONY: add_module_version patch_module_version
+ifeq ($(FIO_DKMS_BUILD),1)
+# DKMS builds a copied source tree without .git. The installer records the
+# source version in dkms.conf; do not derive it from the running kernel or
+# rewrite the linked binary (DKMS may subsequently strip/sign that binary).
+add_module_version:
+	@printf '%s\n' '$(MODULE_VERSION)' | grep -Eq '^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$$'
+	@printf '#include "linux/module.h"\nMODULE_LICENSE("GPL");\nMODULE_VERSION("%s");\n' '$(MODULE_VERSION)' > license.c
+
+patch_module_version:
+	@:
+else
 add_module_version patch_module_version:
 	@ret="$$("$(shell pwd)"/module_operations.sh -n "$(FIO_DRIVER_NAME)" -v "$(MODULE_VERSION)")" ; \
 	if [ -n "$$ret" ] ; then \
@@ -114,10 +125,11 @@ add_module_version patch_module_version:
 		echo ""$$ret"" ; \
 		echo "" ; \
 	fi
+endif
 
 .PHONY: dkms
 dkms:
-	sudo ./module_operations.sh -n "$(FIO_DRIVER_NAME)" -v "$(MODULE_VERSION)" -l ${LAST_KFIO_LIB} -d
+	bash ./dkms-install.sh "$(KERNELVER)" "$(KERNEL_BUILD)"
 
 .PHONY: dpkg
 dpkg:
