@@ -534,10 +534,9 @@ int kfio_pci_request_regions(kfio_pci_dev_t *pdev, const char *res_name)
     return pci_request_regions((struct pci_dev *)pdev, res_name);
 }
 
-extern int dma32_clamp;
-
 int kfio_pci_set_dma_mask(kfio_pci_dev_t *pdev, uint64_t mask)
 {
+    extern int dma32_clamp;
     struct device *dev = &((struct pci_dev *)pdev)->dev;
     u64 effective_mask = DMA_BIT_MASK(32);
     int ret;
@@ -605,6 +604,7 @@ void noinline *kfio_dma_alloc_coherent(kfio_pci_dev_t *pdev, unsigned int size,
      * ZONE_DMA32 (<4 GiB) even when the PCIe root port is attached to a
      * non-zero NUMA node whose local memory starts above 4 GiB.
      */
+    extern int dma32_clamp;
     struct pci_dev *pci_dev = (struct pci_dev *)pdev;
     struct device *dev = &pci_dev->dev;
     dma_addr_t dma_addr = 0;

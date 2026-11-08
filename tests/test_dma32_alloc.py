@@ -79,6 +79,7 @@ struct page {
     int in_use;
 };
 
+int dma32_clamp = 1;
 static int g_mock_mask_rc = 0;
 static dma_addr_t g_mock_next_dma_addr = 0x10000000ULL;
 static int g_mock_fail_node_gt0 = 0;
@@ -255,6 +256,23 @@ int main(void)
     v = kfio_dma_alloc_coherent(&pdev, 0x100000U, &dma_hdl);
     assert(v == NULL);
     assert(g_coherent_free_count == 2);
+
+    /* 3b. dma32_clamp=0: full mask honoured, no ZONE_DMA32, no node-0 reroute, no 4 GiB refusal */
+    dma32_clamp = 0;
+    rc = kfio_pci_set_dma_mask(&pdev, ~0ULL);
+    assert(rc == 0);
+    assert(pdev.dev.dma_mask == ~0ULL);
+    g_mock_next_dma_addr = 0x200000000ULL; /* 8 GiB, above the 32-bit boundary */
+    v = kfio_dma_alloc_coherent(&pdev, 0x100000U, &dma_hdl);
+    assert(v != NULL);
+    assert(g_last_coherent_alloc_node == 1);
+    assert((g_last_coherent_gfp & __GFP_DMA32) == 0);
+    assert(dma_hdl.phys_addr == 0x200000000ULL);
+    kfio_dma_free_coherent(&pdev, 0x100000U, v, &dma_hdl);
+    dma32_clamp = 1;
+    rc = kfio_pci_set_dma_mask(&pdev, ~0ULL);
+    assert(rc == 0);
+    assert(pdev.dev.dma_mask == DMA_BIT_MASK(32));
 
     /* 4. __kfio_malloc / kfio_free bounds, 16B alignment, and NUMA1 fallback */
     assert(kfio_malloc(0) == NULL);
