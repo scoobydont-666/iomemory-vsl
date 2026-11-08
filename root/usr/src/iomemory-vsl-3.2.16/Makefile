@@ -85,13 +85,21 @@ PERFILE_OBJS  := license.o mod.o pci.o sysrq.o driver_init.o kfio.o errno.o \
                  ktime.o sched.o cdev.o kscsi.o kscsi_host.o kblock.o kcondvar.o \
                  kinfo.o kexports.o khotplug.o kcsr.o module_param.o
 
+# Kernels <= 6.x already run objtool per object inside kbuild; a second pass
+# re-emits __pfx_ symbols and the relink fails with duplicate definitions.
+KREL_MAJOR    := $(shell cut -d. -f1 $(KERNEL_BUILD)/include/config/kernel.release 2>/dev/null)
+
 objtool_perfile: modules
-	@if [ -x "$(OBJTOOL)" ]; then \
+	@if [ -z "$(KREL_MAJOR)" ]; then \
+	  echo "  cannot read $(KERNEL_BUILD)/include/config/kernel.release" >&2; exit 1; \
+	elif [ "$(KREL_MAJOR)" -lt 7 ]; then \
+	  echo "  OBJTOOL per-file: kernel $(KREL_MAJOR).x runs objtool per object in kbuild; not needed"; \
+	elif [ -x "$(OBJTOOL)" ]; then \
 	  echo "  OBJTOOL per-file (task-15303): $(words $(PERFILE_OBJS)) candidate objects"; \
 	  n=0; \
 	  for o in $(PERFILE_OBJS); do \
 	    if [ -f "$$o" ]; then \
-	      $(OBJTOOL) $(OBJTOOL_FLAGS) "$$o" >/dev/null 2>&1 || true; \
+	      $(OBJTOOL) $(OBJTOOL_FLAGS) "$$o" || { echo "  OBJTOOL per-file: FATAL on $$o" >&2; exit 1; }; \
 	      n=$$((n+1)); \
 	    fi; \
 	  done; \
