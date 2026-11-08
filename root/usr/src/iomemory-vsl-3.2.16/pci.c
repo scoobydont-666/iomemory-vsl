@@ -534,11 +534,19 @@ int kfio_pci_request_regions(kfio_pci_dev_t *pdev, const char *res_name)
     return pci_request_regions((struct pci_dev *)pdev, res_name);
 }
 
+extern int dma32_clamp;
+
 int kfio_pci_set_dma_mask(kfio_pci_dev_t *pdev, uint64_t mask)
 {
     struct device *dev = &((struct pci_dev *)pdev)->dev;
     u64 effective_mask = DMA_BIT_MASK(32);
     int ret;
+
+    if (!dma32_clamp && mask != 0)
+    {
+        effective_mask = mask;
+    }
+    else
 
     /*
      * ioDrive2 / ioScale2 hardware DMA descriptors and EB-scan buffers require
@@ -619,15 +627,15 @@ void noinline *kfio_dma_alloc_coherent(kfio_pci_dev_t *pdev, unsigned int size,
      * NUMA node so the kernel coherent allocator draws from node-0 ZONE_DMA32.
      */
     orig_node = dev_to_node(dev);
-    if (orig_node > 0 && node_online(0))
+    if (dma32_clamp && orig_node > 0 && node_online(0))
     {
         set_dev_node(dev, 0);
     }
 
     vaddr = dma_alloc_coherent(dev, size, &dma_addr,
-                               GFP_KERNEL | __GFP_DMA32 | __GFP_NOWARN);
+                               GFP_KERNEL | (dma32_clamp ? __GFP_DMA32 : 0) | __GFP_NOWARN);
 
-    if (orig_node > 0 && node_online(0))
+    if (dma32_clamp && orig_node > 0 && node_online(0))
     {
         set_dev_node(dev, orig_node);
     }
@@ -637,8 +645,9 @@ void noinline *kfio_dma_alloc_coherent(kfio_pci_dev_t *pdev, unsigned int size,
         return NULL;
     }
 
-    if ((uint64_t)dma_addr > DMA_BIT_MASK(32) ||
-        ((uint64_t)dma_addr + (uint64_t)size - 1ULL) > DMA_BIT_MASK(32))
+    if (dma32_clamp &&
+        ((uint64_t)dma_addr > DMA_BIT_MASK(32) ||
+         ((uint64_t)dma_addr + (uint64_t)size - 1ULL) > DMA_BIT_MASK(32)))
     {
         errprint("%s: coherent DMA allocation (size=%u, dma_addr=0x%llx) exceeded 32-bit boundary\n",
                  pci_name(pci_dev), size, (unsigned long long)dma_addr);
