@@ -50,6 +50,14 @@ KFIO_MODULE_PARAM_DESC(numa_node_forced_local, "Only schedule fio-wq completion 
 KFIO_MODULE_PARAM_DESC(numa_node_override, "Override device to NUMA node binding");
 KFIO_MODULE_PARAM_ARRAY(numa_node_override, charp, &num_numa_node_override, S_IRUGO | S_IWUSR);
 
+/* 1 = clamp device DMA to 32 bits and keep coherent rings in ZONE_DMA32 (the
+ * NUMA1 attach fix for GIGA). 0 = honor the 64-bit mask the hardware supports;
+ * needed where a 32-bit mask forces every I/O through swiotlb bounce buffers
+ * (mango, iommu=pt: soft lockup in swiotlb_find_pool on first write). */
+int         dma32_clamp = 1;
+KFIO_MODULE_PARAM(dma32_clamp, int, S_IRUGO);
+KFIO_MODULE_PARAM_DESC(dma32_clamp, "Clamp device DMA addressing to 32 bits: 1 = clamp (default, NUMA1 attach fix), 0 = use the full mask the hardware supports");
+
 int         sure_erase_mode = FIO_SURE_ERASE_MODE_DEFAULT;
 KFIO_MODULE_PARAM(sure_erase_mode, int, S_IRUGO | S_IWUSR);
 KFIO_MODULE_PARAM_DESC(sure_erase_mode, "Ignore calls that disturb fio-sure-erase with secure kernels, disables auto_attach.");
