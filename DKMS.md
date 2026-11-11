@@ -123,7 +123,7 @@ propagation, old-install preservation, source collisions, dirty/untracked files,
 invalid arguments, missing headers and source symlinks. They do **not** compile
 the complete driver, exercise real DKMS version selection, or access hardware.
 
-The `DKMS lifecycle` workflow separately attempts real builds on Ubuntu 24.04
+The `Driver contracts and DKMS builds` workflow separately attempts real builds on Ubuntu 24.04
 with GA and HWE headers, repeats installation, then runs `dkms autoinstall` for
 the second kernel and checks version/vermagic. It uses an ephemeral GitHub-hosted
 runner with read-only repository permissions, never a self-hosted storage host.
@@ -134,6 +134,8 @@ remain necessary on representative machines; CI does not perform them.
 The full regression command is `python3 -m unittest discover -s tests -p 'test_*.py' -v`.
 The `Driver contracts and DKMS builds` workflow covers PRs and pushes to `main`,
 retaining exact-candidate tests, headers, module metadata, and build diagnostics.
+It also builds the manual `modules` target from the Git-free registered source
+and checks the resulting version and vermagic without installing or loading it.
 All supported `all`, `gpl`, `modules`, and `modules_install` entry points converge
 on the same validated artifact path; packages invoke that path too. Generated
 version metadata is linked into the module before signing. The retired
@@ -143,8 +145,9 @@ of core objects; see [binary assurance](docs/binary-assurance.md).
 
 See [the remediation record](docs/security-modernization-2026-11-11.md) and
 [qualification matrix](docs/qualification.md) before treating a candidate as a
-release. Additional maintainer local-source and firmware evidence is pending
-comparison with the reviewed GitHub baseline.
+release. The [supplied local-source comparison](docs/local-reconciliation-2026-11-11.md)
+is complete for tracked files; it identifies different loaded, installed, and
+repo-root modules and records the remaining firmware and core/source evidence.
 
 Reference: the DKMS project's `dkms(8)` documentation, especially `add`, `build`,
 `install`, `autoinstall`, `DKMS.CONF`, and `DKMS.CONF VARIABLES`:

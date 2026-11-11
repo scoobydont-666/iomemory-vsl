@@ -1,9 +1,11 @@
 # Security reporting and supported scope
 
 The reviewed GitHub snapshot contains a legacy storage driver with an opaque
-core. Additional maintainer source and release evidence must be reconciled. Development changes and successful builds do not constitute
-hardware qualification. Use the exact revisions and platform evidence recorded
-in [qualification](docs/qualification.md).
+core. The [supplied local comparison](docs/local-reconciliation-2026-11-11.md)
+has been reconciled; residual core/source and artifact identity limits remain.
+Development changes and successful builds do not constitute hardware
+qualification. Use the exact revisions and platform evidence recorded in
+[qualification](docs/qualification.md).
 
 ## Reporting a vulnerability
 

@@ -1,0 +1,157 @@
+auto_attach auto_attach_cache bypass_ecc capacity_warning_threshold compaction_timeout_ms disable_groomer disable_msi disable_msix disable_scanner enable_discard enable_ecc enable_unmap exclude_devices expected_io_size external_power_override fio_dev_optimal_blk_size fio_dev_wait_timeout_secs fio_qos_enable force_minimal_mode force_soft_ecc global_slot_power_limit_mw groomer_high_water_delta_hpcnt groomer_low_water_delta_hpcnt groom_harder_threshold include_devices iodrive_load_eb_map iodrive_load_midprom make_assert_nonfatal max_md_blocks_per_device max_requests numa_node_forced_local numa_node_override parallel_attach preallocate_mb preallocate_memory read_pipe_depth retire_on_psub rmap_memory_limit_MiB rsort_memory_limit_MiB scsi_queue_depth strict_sync sure_erase_mode tintr_hw_wait use_command_timeouts use_large_pcie_rx_buffer use_modules use_new_io_sched use_workqueue 
+DKMS (dkms-3.4.1) make.log for iomemory-vsl/1794116140.13145f4abf6c for kernel 7.0.0-28-generic (x86_64)
+Sun Nov  8 01:59:32 PM UTC 2026
+
+Building module(s)
+# command: 'make' -j1 gpl DKMS_KERNEL_VERSION='7.0.0-28-generic' KERNEL_BUILD='/lib/modules/7.0.0-28-generic/build' MODULE_VERSION='1794116140.13145f4abf6c' FIO_DKMS_BUILD=1
+make[2]: Entering directory '/var/lib/dkms/iomemory-vsl/1794116140.13145f4abf6c/build'
+FIOCC is x86_64-linux-gnu-gcc-13
+sed -i 's/Proprietary/GPL/g' Kbuild
+if [ ! -f "kfio/x86_64_cc133_libkfio.o" ];then \
+	cp kfio/x86_64_latest_libkfio.o_shipped kfio/x86_64_cc133_libkfio.o; \
+fi \
+
+./kfio_config.sh -a x86_64 -o include/fio/port/linux/kfio_config.h -k /lib/modules/7.0.0-28-generic/build -p -d /var/lib/dkms/iomemory-vsl/1794116140.13145f4abf6c/build/kfio_config -l 0 -s /lib/modules/7.0.0-28-generic/source
+Detecting Kernel Flags
+Config dir         : /var/lib/dkms/iomemory-vsl/1794116140.13145f4abf6c/build/kfio_config
+Output file        : include/fio/port/linux/kfio_config.h
+Kernel output dir  : /lib/modules/7.0.0-28-generic/build
+Kernel source dir  : /lib/modules/7.0.0-28-generic/build
+Starting tests:
+  1794146372.742  KFIOC_X_HANDLE_SYSRQ_IS_U8...
+  1794146373.061  KFIOC_X_BDOPS_OPEN_GENDISK_AND_BLK_MODE_T...
+  1794146373.356  KFIOC_X_BDOPS_RELEASE_1_ARG...
+  1794146373.653  KFIOC_X_CAPS_PDE_DATA...
+  1794146373.956  KFIOC_X_BIO_SPLIT_TO_LIMITS...
+  1794146374.259  KFIOC_X_PROC_CREATE_DATA_WANTS_PROC_OPS...
+  1794146374.561  KFIOC_X_TASK_HAS_CPUS_MASK...
+  1794146374.868  KFIOC_X_BLK_ALLOC_QUEUE_NODE_EXISTS...
+  1794146375.169  KFIOC_X_BLK_ALLOC_QUEUE_EXISTS...
+  1794146375.474  KFIOC_X_BLK_ALLOC_DISK_EXISTS...
+  1794146375.790  KFIOC_X_BLK_ALLOC_DISK_HAS_QUEUE_LIMITS...
+  1794146376.083  KFIOC_X_HAS_MAKE_REQUEST_FN...
+  1794146376.341  KFIOC_X_GENHD_PART0_IS_A_POINTER...
+  1794146376.596  KFIOC_X_BIO_HAS_BI_BDEV...
+  1794146376.855  KFIOC_X_SUBMIT_BIO_RETURNS_BLK_QC_T...
+  1794146377.107  KFIOC_X_VOID_ADD_DISK...
+  1794146377.377  KFIOC_X_DISK_HAS_OPEN_MUTEX...
+  1794146377.644  KFIOC_X_BLK_MQ_F_SHOULD_MERGE...
+Started tests, waiting for completions...
+  1794146377.922  KFIOC_X_HANDLE_SYSRQ_IS_U8=1
+  1794146377.954  KFIOC_X_BDOPS_OPEN_GENDISK_AND_BLK_MODE_T=1
+  1794146377.987  KFIOC_X_BDOPS_RELEASE_1_ARG=1
+  1794146378.019  KFIOC_X_CAPS_PDE_DATA=0
+  1794146378.050  KFIOC_X_BIO_SPLIT_TO_LIMITS=1
+  1794146378.085  KFIOC_X_PROC_CREATE_DATA_WANTS_PROC_OPS=1
+  1794146378.116  KFIOC_X_TASK_HAS_CPUS_MASK=1
+  1794146378.148  KFIOC_X_BLK_ALLOC_QUEUE_NODE_EXISTS=0
+  1794146378.180  KFIOC_X_BLK_ALLOC_QUEUE_EXISTS=0
+  1794146378.213  KFIOC_X_BLK_ALLOC_DISK_EXISTS=0
+  1794146378.245  KFIOC_X_BLK_ALLOC_DISK_HAS_QUEUE_LIMITS=1
+  1794146378.277  KFIOC_X_HAS_MAKE_REQUEST_FN=0
+  1794146379.319  KFIOC_X_GENHD_PART0_IS_A_POINTER=1
+  1794146379.357  KFIOC_X_BIO_HAS_BI_BDEV=1
+  1794146379.396  KFIOC_X_SUBMIT_BIO_RETURNS_BLK_QC_T=0
+  1794146379.430  KFIOC_X_VOID_ADD_DISK=0
+  1794146379.463  KFIOC_X_DISK_HAS_OPEN_MUTEX=1
+  1794146379.496  KFIOC_X_BLK_MQ_F_SHOULD_MERGE=0
+Finished
+1794146379.511  Exiting
+Preserving configdir due to '-p' option: /var/lib/dkms/iomemory-vsl/1794116140.13145f4abf6c/build/kfio_config
+make \
+-j256 \
+-C /lib/modules/7.0.0-28-generic/build \
+FIO_DRIVER_NAME=iomemory-vsl \
+FUSION_DRIVER_DIR=/var/lib/dkms/iomemory-vsl/1794116140.13145f4abf6c/build \
+M=/var/lib/dkms/iomemory-vsl/1794116140.13145f4abf6c/build \
+EXTRA_CFLAGS+="-I/var/lib/dkms/iomemory-vsl/1794116140.13145f4abf6c/build/include -DBUILDING_MODULE -DLINUX_IO_SCHED -Wall -Werror" \
+ccflags-y+="-I/var/lib/dkms/iomemory-vsl/1794116140.13145f4abf6c/build/include -DBUILDING_MODULE -DLINUX_IO_SCHED -Wall -Werror" \
+INSTALL_MOD_DIR=extra/fio \
+INSTALL_MOD_PATH= \
+KFIO_LIB=kfio/x86_64_cc133_libkfio.o \
+objtool=/var/lib/dkms/iomemory-vsl/1794116140.13145f4abf6c/build/objtool_wrapper \
+modules
+make[3]: Entering directory '/usr/src/linux-headers-7.0.0-28-generic'
+make[4]: Entering directory '/var/lib/dkms/iomemory-vsl/1794116140.13145f4abf6c/build'
+warning: the compiler differs from the one used to build the kernel
+  The kernel was built by: x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+  You are using:           gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+  CC [M]  main.o
+  CC [M]  license.o
+  CC [M]  mod.o
+  CC [M]  pci.o
+  CC [M]  sysrq.o
+  CC [M]  driver_init.o
+  CC [M]  kfio.o
+  CC [M]  errno.o
+  CC [M]  state.o
+  CC [M]  kcache.o
+  CC [M]  kfile.o
+  CC [M]  kmem.o
+  CC [M]  kfio_common.o
+  CC [M]  kcpu.o
+  CC [M]  kscatter.o
+  CC [M]  ktime.o
+  CC [M]  sched.o
+  CC [M]  cdev.o
+  CC [M]  kblock.o
+  CC [M]  kcondvar.o
+  CC [M]  kinfo.o
+  CC [M]  kexports.o
+  CC [M]  khotplug.o
+  CC [M]  kcsr.o
+  CC [M]  module_param.o
+  LD [M]  iomemory-vsl.o
+iomemory-vsl.o: error: objtool: kfio_info_create_dir+0xae (.text+0xc96e): unannotated intra-function call
+objtool_wrapper: tolerated known libkfio blob limitation (task-15303); first-party objects are validated by the per-file pass
+  MODPOST Module.symvers
+  CC [M]  iomemory-vsl.mod.o
+  CC [M]  .module-common.o
+  LD [M]  iomemory-vsl.ko
+  BTF [M] iomemory-vsl.ko
+Skipping BTF generation for iomemory-vsl.ko due to unavailability of vmlinux
+make[4]: Leaving directory '/var/lib/dkms/iomemory-vsl/1794116140.13145f4abf6c/build'
+make[3]: Leaving directory '/usr/src/linux-headers-7.0.0-28-generic'
+  OBJTOOL per-file (task-15303): 26 candidate objects
+  OBJTOOL per-file: processed 24 objects; relinking
+make[3]: Entering directory '/var/lib/dkms/iomemory-vsl/1794116140.13145f4abf6c/build'
+FIOCC is x86_64-linux-gnu-gcc-13
+if [ ! -f "kfio/x86_64_cc133_libkfio.o" ];then \
+	cp kfio/x86_64_latest_libkfio.o_shipped kfio/x86_64_cc133_libkfio.o; \
+fi \
+
+make \
+-j256 \
+-C /lib/modules/7.0.0-28-generic/build \
+FIO_DRIVER_NAME=iomemory-vsl \
+FUSION_DRIVER_DIR=/var/lib/dkms/iomemory-vsl/1794116140.13145f4abf6c/build \
+M=/var/lib/dkms/iomemory-vsl/1794116140.13145f4abf6c/build \
+EXTRA_CFLAGS+="-I/var/lib/dkms/iomemory-vsl/1794116140.13145f4abf6c/build/include -DBUILDING_MODULE -DLINUX_IO_SCHED -Wall -Werror" \
+ccflags-y+="-I/var/lib/dkms/iomemory-vsl/1794116140.13145f4abf6c/build/include -DBUILDING_MODULE -DLINUX_IO_SCHED -Wall -Werror" \
+INSTALL_MOD_DIR=extra/fio \
+INSTALL_MOD_PATH= \
+KFIO_LIB=kfio/x86_64_cc133_libkfio.o \
+objtool=/var/lib/dkms/iomemory-vsl/1794116140.13145f4abf6c/build/objtool_wrapper \
+modules
+make[4]: Entering directory '/usr/src/linux-headers-7.0.0-28-generic'
+make[5]: Entering directory '/var/lib/dkms/iomemory-vsl/1794116140.13145f4abf6c/build'
+warning: the compiler differs from the one used to build the kernel
+  The kernel was built by: x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+  You are using:           gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+  CC [M]  license.o
+  LD [M]  iomemory-vsl.o
+iomemory-vsl.o: error: objtool: kfio_info_create_dir+0xae (.text+0xc96e): unannotated intra-function call
+objtool_wrapper: tolerated known libkfio blob limitation (task-15303); first-party objects are validated by the per-file pass
+  MODPOST Module.symvers
+  CC [M]  iomemory-vsl.mod.o
+  LD [M]  iomemory-vsl.ko
+  BTF [M] iomemory-vsl.ko
+Skipping BTF generation for iomemory-vsl.ko due to unavailability of vmlinux
+make[5]: Leaving directory '/var/lib/dkms/iomemory-vsl/1794116140.13145f4abf6c/build'
+make[4]: Leaving directory '/usr/src/linux-headers-7.0.0-28-generic'
+make[3]: Leaving directory '/var/lib/dkms/iomemory-vsl/1794116140.13145f4abf6c/build'
+make[2]: Leaving directory '/var/lib/dkms/iomemory-vsl/1794116140.13145f4abf6c/build'
+
+# exit code: 0
+# elapsed time: 00:00:12
+----------------------------------------------------------------

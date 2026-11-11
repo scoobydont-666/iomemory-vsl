@@ -9,10 +9,21 @@ ran 19 tests and performed real DKMS build/install against Ubuntu
 later source revisions, a load test, or a persistence test.
 
 The security-modernization PR adds contract regressions and code repairs. Its
-own CI results must be attached to the final PR head. Hardware qualification,
-signing/boot recovery, core rights/provenance, and GitHub settings
-remain separate acceptance conditions. There is no claim that every 5.x, 6.x,
-or 7.x kernel or every Fusion-io card is supported.
+initial [CI run 43080537080](https://github.com/scoobydont-666/iomemory-vsl/actions/runs/43080537080)
+passed 67 offline tests and real DKMS build/install for both header releases above,
+including repeat installation, Git-free second-kernel autoinstall, version/vermagic,
+and library discovery. This run covers PR head `547fc5432e34dda6927e09cbd56c3f23620abb67`
+through GitHub merge candidate `f23074cf7fdb5c9c5995be272f42ddc4eff1b2ca`.
+Subsequent workflow changes add the Git-free manual `modules` route and preserve
+its generated header and objtool evidence; their actual result must be checked
+on the final PR head.
+
+The [supplied local comparison](local-reconciliation-2026-11-11.md) is complete
+for tracked source. Its reported loaded, installed, and repo-root module identities
+differ. Hardware qualification, a controlled artifact transition, signing/boot
+recovery, core rights/provenance, and GitHub settings remain separate acceptance
+conditions. There is no claim that every 5.x, 6.x, or 7.x kernel or every Fusion-io
+card is supported.
 
 ## Required evidence lanes
 

@@ -21,11 +21,15 @@ clues but are insufficient to assign dependency versions or CVEs reliably.
 
 ## Source and license boundaries
 
-The maintainer reports an updated/customized local driver and firmware copy with
-additional source/licensing context. That copy and its release documents are
-pending comparison. The statements here describe the reviewed GitHub snapshot
-only and must be updated when those materials are available. Company status
-alone is not the evidence used to classify these files.
+The maintainer's comparison branch `26ab52e` has been
+[reconciled](local-reconciliation-2026-11-11.md). Its tracked driver, selected
+core/library bytes, and existing License/NOTICE files match the reviewed baseline.
+The reconstructed source named by the reported loaded module also contains the
+same selected core/library inputs and notices. The supplied package contains no
+replacement core or library source and no new source-release terms. These
+findings describe the supplied files; any additional release documents should be
+reviewed when available. Company status alone is not the evidence used to
+classify these files.
 
 The adapter sources carry their existing file-level notices. The kfio README
 describes the core objects as proprietary; the RPM metadata also records

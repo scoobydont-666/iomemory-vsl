@@ -1,0 +1,34 @@
+From b9b460318a59a988c4e9d6dc3e2304875ae6418a Mon Sep 17 00:00:00 2001
+From: REDACTED-AUTHOR <REDACTED-EMAIL>
+Date: Sat, 27 Jun 2026 01:24:23 +0000
+Subject: [PATCH] kmem: force DMA32 zone in __kfio_malloc (NUMA1 EB-scan buf
+ <4GB)
+
+task-10911: the EB-header scan buffer (ifio_c6e99 -> kfio_malloc) landed
+>4GB on socket-1 cards; the 32-bit card could not write EB headers ->
+corrupt read -> blob set disable flag (dev+0xed8) -> attach EINVAL.
+Force __GFP_DMA32 so the buffer is physically <4GB.
+
+NOTE: simple variant per lead order; if slab ignores __GFP_DMA32, fall
+back to __get_free_pages(gfp|__GFP_DMA32) + size-header.
+
+---
+ root/usr/src/iomemory-vsl-3.2.16/kmem.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/root/usr/src/iomemory-vsl-3.2.16/kmem.c b/root/usr/src/iomemory-vsl-3.2.16/kmem.c
+index 41101bb..94d9a52 100644
+--- a/root/usr/src/iomemory-vsl-3.2.16/kmem.c
++++ b/root/usr/src/iomemory-vsl-3.2.16/kmem.c
+@@ -61,7 +61,7 @@ static void *__kfio_malloc(fio_size_t size, gfp_t gfp, kfio_numa_node_t node)
+ 
+     FUSION_ALLOCATION_TRIPWIRE_TEST();
+ 
+-    return kmalloc(size, gfp);
++    return kmalloc(size, gfp | __GFP_DMA32);
+ }
+ 
+ /**
+-- 
+2.43.0
+

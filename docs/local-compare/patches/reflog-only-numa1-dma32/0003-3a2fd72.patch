@@ -1,0 +1,71 @@
+From 3a2fd72ced41c96d809941e0bee07b4235f8e4c5 Mon Sep 17 00:00:00 2001
+From: REDACTED-AUTHOR <REDACTED-EMAIL>
+Date: Sat, 27 Jun 2026 01:27:07 +0000
+Subject: [PATCH] kmem: page-alloc with DMA32 for EB-scan buf (NUMA1 <4GB)
+
+task-10911: __kfio_malloc used bare kmalloc, which on 6.17 SLUB ignores
+__GFP_DMA32 (no dma32 kmalloc cache) -> EB-scan buffer landed >4GB on
+socket-1 cards -> 32-bit card could not write EB headers -> blob read
+garbage -> disable flag (dev+0xed8) -> attach EINVAL. Switch to
+alloc_pages_node(gfp|__GFP_DMA32) which the page allocator honors; an
+8-byte header stores the page order so kfio_free releases the exact
+pages and the payload stays >=8B aligned.
+
+---
+ root/usr/src/iomemory-vsl-3.2.16/kmem.c | 24 ++++++++++++++++++++++--
+ 1 file changed, 22 insertions(+), 2 deletions(-)
+
+diff --git a/root/usr/src/iomemory-vsl-3.2.16/kmem.c b/root/usr/src/iomemory-vsl-3.2.16/kmem.c
+index 41101bb..132b182 100644
+--- a/root/usr/src/iomemory-vsl-3.2.16/kmem.c
++++ b/root/usr/src/iomemory-vsl-3.2.16/kmem.c
+@@ -54,6 +54,14 @@ static void *__kfio_malloc(fio_size_t size, gfp_t gfp, kfio_numa_node_t node)
+ {
+     // This has been determined to be a place to put this injector agent, but there are compile problems.
+     // Apparently fio-port.ko cannot find the error_injection_agents.o file.
++    // task-10911: NUMA1 ioScale2 cards require DMA32 (<4GB) buffers. kmalloc ignores
++    // __GFP_DMA32 (no dma32 slab cache); the page allocator honors it. Allocate via
++    // alloc_pages_node(__GFP_DMA32), stash the page order in an 8-byte header (keeps
++    // the payload >=8B aligned for DMA) so kfio_free can release the exact pages.
++    struct page *_pg;
++    unsigned int *_hdr;
++    unsigned int _order;
++
+ #if 0   //ENABLE_ERROR_INJECTION
+     if(inject_hard_alloc_error())
+         return NULL;
+@@ -61,7 +69,15 @@ static void *__kfio_malloc(fio_size_t size, gfp_t gfp, kfio_numa_node_t node)
+ 
+     FUSION_ALLOCATION_TRIPWIRE_TEST();
+ 
+-    return kmalloc(size, gfp);
++    _order = get_order(size + 8);
++    _pg = alloc_pages_node(node == -1 ? 0 : node,
++                           gfp | __GFP_DMA32 | __GFP_ZERO | __GFP_NOWARN,
++                           _order);
++    if (!_pg)
++        return NULL;
++    _hdr = (unsigned int *)page_address(_pg);
++    *_hdr = _order;
++    return (void *)((char *)_hdr + 8);
+ }
+ 
+ /**
+@@ -103,9 +119,13 @@ void *kfio_malloc_atomic_node(fio_size_t size, kfio_numa_node_t node)
+  */
+ void noinline kfio_free(void *ptr, fio_size_t size)
+ {
++    unsigned int *_hdr;
+     (void) size;
+ 
+-    kfree(ptr);
++    if (!ptr)
++        return;
++    _hdr = (unsigned int *)((char *)ptr - 8);
++    __free_pages(virt_to_page(_hdr), *_hdr);
+ }
+ KFIO_EXPORT_SYMBOL(kfio_free);
+ 
+-- 
+2.43.0
+

@@ -48,13 +48,25 @@ suggestion is incorporated in a subsequent documentation-only change.
 ## Verdict and remaining gates
 
 Both reviews support publication as a **draft review candidate**. They do not
-establish kernel-header compilation, full core behavior, device persistence,
-removal concurrency, package/boot recovery, or equivalence to the maintainer's
-custom local source and firmware.
+establish full core behavior, device persistence, removal concurrency, or
+package/boot recovery. Kernel-header compilation and supplied-source
+reconciliation have separate evidence below.
 
 [PR #6](https://github.com/scoobydont-666/iomemory-vsl/pull/6) carries the current
-candidate and CI status. The initial real build run is
-[43080537080](https://github.com/scoobydont-666/iomemory-vsl/actions/runs/43080537080).
-Consult its actual result and later runs; this record does not mark a pending
-or failed run as passing. Any later code change requires its affected checks and
-review to be renewed.
+candidate and CI status. The initial real build run
+[43080537080](https://github.com/scoobydont-666/iomemory-vsl/actions/runs/43080537080)
+passed all 67 tests and real DKMS build/install on Ubuntu `6.8.0-149-generic`
+and `7.0.0-42-generic`, including repeat install, second-kernel autoinstall,
+version/vermagic, and library discovery. It tested the published candidate above
+through merge candidate `f23074cf7fdb5c9c5995be272f42ddc4eff1b2ca`.
+Later workflow changes add a manual artifact build and preserve its generated
+inputs; consult the final PR head's actual run for that evidence. Any later code
+change requires its affected checks and review to be renewed.
+
+Session `storage_fixes` independently reconstructed the historical source from
+`d171d8b` plus the supplied `ca4c075` patch, producing tree
+`31922027d7a0a28752311b400838561b64df2168`. It confirmed the source and binary
+comparisons in [the reconciliation record](../local-reconciliation-2026-11-11.md).
+This was a separate historical comparison, not an independent review of the
+agent's own storage implementation. No additional historical change needs to be
+transplanted; the actual loaded artifact and firmware remain supplied host evidence.
