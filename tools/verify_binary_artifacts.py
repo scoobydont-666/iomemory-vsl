@@ -92,7 +92,7 @@ def main():
             print(error, file=sys.stderr)
         return 1
     print(f"Verified {len(manifest['artifacts'])} opaque binary inputs; "
-          "vendor provenance and redistribution rights remain separately reviewed.")
+          "vendor provenance and licensing are outside this content check.")
     return 0
 
 

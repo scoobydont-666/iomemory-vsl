@@ -1,8 +1,8 @@
 # iomemory-vsl: legacy VSL3 Linux compatibility driver
 
 This fork maintains the Linux adapter around the legacy Fusion-io VSL3 core.
-The core and `libvsl.so` are distributed as opaque binaries; the repository is
-not a complete source implementation of the storage stack. See
+The reviewed GitHub snapshot contains the core and `libvsl.so` as opaque binaries;
+that snapshot is not a complete source implementation of the storage stack. See
 [binary assurance](docs/binary-assurance.md) and the
 [security modernization record](docs/security-modernization-2026-11-11.md).
 

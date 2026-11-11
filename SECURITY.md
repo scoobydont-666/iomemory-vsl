@@ -1,7 +1,7 @@
 # Security reporting and supported scope
 
-This repository maintains an unsupported legacy storage driver with an opaque
-proprietary core. Development changes and successful builds do not constitute
+The reviewed GitHub snapshot contains a legacy storage driver with an opaque
+core. Additional maintainer source and release evidence must be reconciled. Development changes and successful builds do not constitute
 hardware qualification. Use the exact revisions and platform evidence recorded
 in [qualification](docs/qualification.md).
 

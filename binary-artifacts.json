@@ -13,9 +13,9 @@
         "type": 1,
         "machine": 62
       },
-      "source_available": false,
       "vendor_signature_verified": false,
-      "license_review": "Proprietary binary; original terms and redistribution authority require separate review."
+      "license_review": "Baseline repository documentation describes proprietary binaries; current terms pending maintainer source/release evidence.",
+      "source_present_in_reviewed_repository": false
     },
     {
       "path": "root/usr/src/iomemory-vsl-3.2.16/kfio/x86_64_cc43_libkfio.o_shipped",
@@ -27,9 +27,9 @@
         "type": 1,
         "machine": 62
       },
-      "source_available": false,
       "vendor_signature_verified": false,
-      "license_review": "Proprietary binary; original terms and redistribution authority require separate review."
+      "license_review": "Baseline repository documentation describes proprietary binaries; current terms pending maintainer source/release evidence.",
+      "source_present_in_reviewed_repository": false
     },
     {
       "path": "root/usr/src/iomemory-vsl-3.2.16/kfio/x86_64_cc44_libkfio.o_shipped",
@@ -41,9 +41,9 @@
         "type": 1,
         "machine": 62
       },
-      "source_available": false,
       "vendor_signature_verified": false,
-      "license_review": "Proprietary binary; original terms and redistribution authority require separate review."
+      "license_review": "Baseline repository documentation describes proprietary binaries; current terms pending maintainer source/release evidence.",
+      "source_present_in_reviewed_repository": false
     },
     {
       "path": "root/usr/src/iomemory-vsl-3.2.16/kfio/x86_64_cc48_libkfio.o_shipped",
@@ -55,9 +55,9 @@
         "type": 1,
         "machine": 62
       },
-      "source_available": false,
       "vendor_signature_verified": false,
-      "license_review": "Proprietary binary; original terms and redistribution authority require separate review."
+      "license_review": "Baseline repository documentation describes proprietary binaries; current terms pending maintainer source/release evidence.",
+      "source_present_in_reviewed_repository": false
     },
     {
       "path": "root/usr/src/iomemory-vsl-3.2.16/kfio/x86_64_cc49_libkfio.o_shipped",
@@ -69,9 +69,9 @@
         "type": 1,
         "machine": 62
       },
-      "source_available": false,
       "vendor_signature_verified": false,
-      "license_review": "Proprietary binary; original terms and redistribution authority require separate review."
+      "license_review": "Baseline repository documentation describes proprietary binaries; current terms pending maintainer source/release evidence.",
+      "source_present_in_reviewed_repository": false
     },
     {
       "path": "root/usr/src/iomemory-vsl-3.2.16/kfio/x86_64_cc53_libkfio.o_shipped",
@@ -83,9 +83,9 @@
         "type": 1,
         "machine": 62
       },
-      "source_available": false,
       "vendor_signature_verified": false,
-      "license_review": "Proprietary binary; original terms and redistribution authority require separate review."
+      "license_review": "Baseline repository documentation describes proprietary binaries; current terms pending maintainer source/release evidence.",
+      "source_present_in_reviewed_repository": false
     },
     {
       "path": "root/usr/src/iomemory-vsl-3.2.16/kfio/x86_64_cc54_libkfio.o_shipped",
@@ -97,9 +97,9 @@
         "type": 1,
         "machine": 62
       },
-      "source_available": false,
       "vendor_signature_verified": false,
-      "license_review": "Proprietary binary; original terms and redistribution authority require separate review."
+      "license_review": "Baseline repository documentation describes proprietary binaries; current terms pending maintainer source/release evidence.",
+      "source_present_in_reviewed_repository": false
     },
     {
       "path": "root/usr/src/iomemory-vsl-3.2.16/kfio/x86_64_cc63_libkfio.o_shipped",
@@ -111,9 +111,9 @@
         "type": 1,
         "machine": 62
       },
-      "source_available": false,
       "vendor_signature_verified": false,
-      "license_review": "Proprietary binary; original terms and redistribution authority require separate review."
+      "license_review": "Baseline repository documentation describes proprietary binaries; current terms pending maintainer source/release evidence.",
+      "source_present_in_reviewed_repository": false
     },
     {
       "path": "root/usr/src/iomemory-vsl-3.2.16/kfio/x86_64_latest_libkfio.o_shipped",
@@ -125,9 +125,9 @@
         "type": 1,
         "machine": 62
       },
-      "source_available": false,
       "vendor_signature_verified": false,
-      "license_review": "Proprietary binary; original terms and redistribution authority require separate review."
+      "license_review": "Baseline repository documentation describes proprietary binaries; current terms pending maintainer source/release evidence.",
+      "source_present_in_reviewed_repository": false
     },
     {
       "path": "root/usr/lib/fio/libvsl.so",
@@ -139,9 +139,9 @@
         "type": 3,
         "machine": 62
       },
-      "source_available": false,
       "vendor_signature_verified": false,
-      "license_review": "Proprietary binary; original terms and redistribution authority require separate review."
+      "license_review": "Baseline repository documentation describes proprietary binaries; current terms pending maintainer source/release evidence.",
+      "source_present_in_reviewed_repository": false
     }
   ]
 }

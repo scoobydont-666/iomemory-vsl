@@ -21,6 +21,12 @@ clues but are insufficient to assign dependency versions or CVEs reliably.
 
 ## Source and license boundaries
 
+The maintainer reports an updated/customized local driver and firmware copy with
+additional source/licensing context. That copy and its release documents are
+pending comparison. The statements here describe the reviewed GitHub snapshot
+only and must be updated when those materials are available. Company status
+alone is not the evidence used to classify these files.
+
 The adapter sources carry their existing file-level notices. The kfio README
 describes the core objects as proprietary; the RPM metadata also records
 Proprietary. Preserve all original notices and archives.
