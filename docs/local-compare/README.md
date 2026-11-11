@@ -41,8 +41,10 @@ on 2026-11-11 (UTC, ~18:35-19:30Z). "Derived" means inferred from commit message
 
 ### How to reconstruct the source of the loaded module
 
-The loaded module's version string names commit `ca4c075`. That commit is not on any GitHub branch, so it is provided
-as a patch rather than pushed (its author metadata is redacted). To obtain the exact tree:
+The loaded module's version string names commit `ca4c075`. Its exact tree is now published as the branch
+`local/loaded-build-ca4c075-20261111` (commit `9328703`, parent `d171d8b`, tree `31922027d7a0`, identical to the tree of
+the original `ca4c075`; only the author and committer identity were replaced). The same change is also kept as a patch.
+To rebuild the tree from the patch instead:
 
 1. Check out `d171d8b` (the parent of `ca4c075`; it is in the history of the GitHub branch `feat/numa1-dma32-on-k7`).
 2. Apply `docs/local-compare/patches/reflog-only-task15303-objtool/0001-ca4c075.patch`.
