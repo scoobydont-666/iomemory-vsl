@@ -70,3 +70,27 @@ comparisons in [the reconciliation record](../local-reconciliation-2026-11-11.md
 This was a separate historical comparison, not an independent review of the
 agent's own storage implementation. No additional historical change needs to be
 transplanted; the actual loaded artifact and firmware remain supplied host evidence.
+
+## Follow-up delivery and reconciliation review
+
+Session `independent_delivery_review` reviewed the manual-build workflow at local
+commit `ef10fc18745479d1c3b6c4e3deda8b9c8067c210` and the subsequent staged
+documentation tree `c6c7f84697fdf2323ae49b19b5cf3c08eb7cb207`. No blocking finding
+remained. This receipt is a documentation-only addition after that review.
+
+The workflow parsed successfully and every shell block passed `bash -n`.
+The actual manual-build block was exercised with temporary command fixtures:
+success returned zero, compiler failure propagated through `tee`, and wrong
+version/vermagic each failed. These fixture checks do not replace its final
+hosted kernel build. Retained artifacts include probe/objtool inputs and
+module/core digests; complete release-record compiler/configuration evidence
+still requires the corresponding target-platform record.
+
+The reviewer independently verified 44 historical/reference hashes, 11 staged
+counterparts, all 10 recorded patch IDs, the published candidate's tree, and
+the unchanged driver tree in the supplied snapshot. Twelve archived payloads
+match the supplied commit byte-for-byte, including the loader renamed to inert
+text. Canonical patch/log whitespace is preserved in those captured files;
+the whitespace check passes for authored changes. No code-check suppression was
+introduced. The reviewer also checked the prior CI logs and artifacts against
+the source identity and results described above.
