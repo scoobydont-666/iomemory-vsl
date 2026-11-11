@@ -55,6 +55,23 @@ jobs:
             modinfo -k "$kernel" iomemory-vsl > "$GITHUB_WORKSPACE/build-evidence/module-$kernel.txt"
           done
           # Do not load/unload modules, attach/format devices, or reboot.
+      - name: Build the manual artifact route from Git-free staged source
+        shell: bash
+        run: |
+          set -euo pipefail
+          second=$(tail -n 1 "$GITHUB_WORKSPACE/build-evidence/header-releases.txt")
+          version=$(modinfo -k "$second" -F version iomemory-vsl)
+          manual="$RUNNER_TEMP/iomemory-manual"
+          mkdir -p "$manual"
+          sudo cp -a "/usr/src/iomemory-vsl-$version/." "$manual/"
+          sudo chown -R "$(id -u):$(id -g)" "$manual"
+          test ! -d "$manual/.git"
+          # Run the public modules target without DKMS-only flags or install/load.
+          make -C "$manual" modules KERNELVER="$second" \
+            KERNEL_BUILD="/lib/modules/$second/build" MODULE_VERSION="$version" NCPUS=2 \
+            2>&1 | tee "$GITHUB_WORKSPACE/build-evidence/manual-build.log"
+          test "$(modinfo -F version "$manual/iomemory-vsl.ko")" = "$version"
+          test "$(modinfo -F vermagic "$manual/iomemory-vsl.ko" | awk '{print $1}')" = "$second"
       - name: Collect build evidence, including failures
         if: always()
         shell: bash
@@ -65,6 +82,24 @@ jobs:
             sudo find /var/lib/dkms/iomemory-vsl -type f \( -name make.log -o -name kfio_config.h -o -name .objtool-link-args -o -name Module.symvers \) \
               -exec cp --parents -t "$GITHUB_WORKSPACE/build-evidence" {} +
             sudo chown -R "$(id -u):$(id -g)" build-evidence
+          fi
+          # DKMS can clean its build directory after installation. The separate
+          # manual build retains compiler/probe/objtool inputs before cleanup.
+          manual="$RUNNER_TEMP/iomemory-manual"
+          if test -d "$manual"; then
+            evidence="$GITHUB_WORKSPACE/build-evidence/manual"
+            mkdir -p "$evidence"
+            for file in include/fio/port/linux/kfio_config.h .objtool-link-args .dkms-source-revision Module.symvers; do
+              if test -f "$manual/$file"; then cp "$manual/$file" "$evidence/$(basename "$file")"; fi
+            done
+            if test -d "$manual/.objtool-first-party"; then
+              cp -a "$manual/.objtool-first-party" "$evidence/"
+            fi
+            if test -f "$manual/iomemory-vsl.ko"; then
+              modinfo "$manual/iomemory-vsl.ko" > "$evidence/module.txt"
+              sha256sum "$manual/iomemory-vsl.ko" > "$evidence/module.sha256"
+            fi
+            find "$manual/kfio" -maxdepth 1 -type f -name '*.o' -exec sha256sum {} + > "$evidence/selected-core.sha256"
           fi
       - name: Retain exact-candidate build evidence
         if: always()
