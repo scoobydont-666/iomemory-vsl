@@ -10,7 +10,7 @@ later source revisions, a load test, or a persistence test.
 
 The security-modernization PR adds contract regressions and code repairs. Its
 own CI results must be attached to the final PR head. Hardware qualification,
-signing/boot recovery, proprietary-core rights/provenance, and GitHub settings
+signing/boot recovery, core rights/provenance, and GitHub settings
 remain separate acceptance conditions. There is no claim that every 5.x, 6.x,
 or 7.x kernel or every Fusion-io card is supported.
 
