@@ -32,6 +32,8 @@
 #include <fio/port/kscatter.h>
 #include <fio/port/ktime.h>
 #include <linux/version.h>
+#include <linux/slab.h>
+#include <linux/nodemask.h>
 
 int kfio_sgl_map_bio(kfio_sg_list_t *sgl, struct bio *pbio);
 void *kfio_sgl_get_byte_pointer(kfio_sg_list_t *sgl, uint32_t offset);
@@ -75,8 +77,19 @@ struct linux_sgl
 int kfio_sgl_alloc_nvec(kfio_pci_dev_t *pcidev, kfio_numa_node_t node, kfio_sg_list_t **sgl, int nvecs)
 {
     struct linux_sgl *lsg;
+    size_t entry_size = sizeof(struct linux_sgentry) + sizeof(struct scatterlist);
 
-    lsg = kfio_malloc_node(sizeof(*lsg) + nvecs * (sizeof(struct linux_sgentry) + sizeof(struct scatterlist)), node);
+    *sgl = NULL;
+    if (nvecs <= 0 || (size_t)nvecs > ((size_t)-1 - sizeof(*lsg)) / entry_size)
+    {
+        return -EINVAL;
+    }
+    if (node < 0 || node >= MAX_NUMNODES || !node_online(node))
+    {
+        node = NUMA_NO_NODE;
+    }
+    /* These descriptors are host-only; only the described pages are DMA mapped. */
+    lsg = kzalloc_node(sizeof(*lsg) + (size_t)nvecs * entry_size, GFP_NOIO, node);
     if (NULL == lsg)
     {
         return -ENOMEM;
@@ -106,8 +119,7 @@ void kfio_sgl_destroy(kfio_sg_list_t *sgl)
        kfio_sgl_dma_unmap(lsg);
     }
 
-    kfio_free(lsg, sizeof(*lsg) +
-                    lsg->max_entries * (sizeof(struct linux_sgentry) + sizeof(struct scatterlist)));
+    kfree(lsg);
 }
 
 void kfio_sgl_reset(kfio_sg_list_t *sgl)
@@ -328,49 +340,39 @@ KFIO_EXPORT_SYMBOL(kfio_sgl_map_bio);
 int kfio_sgl_dma_map(kfio_sg_list_t *sgl, kfio_dma_map_t *dmap, int dir)
 {
     struct linux_sgl *lsg = sgl;
-    int i;
+    int count;
 
-    lsg->pci_dir = dir;
-
-    for (i = 0; i < lsg->num_entries; i++)
-    {
-        struct linux_sgentry *sge;
-        struct scatterlist *sl;
-
-        sge = &lsg->sge[i];
-        sl = &lsg->sl[i];
-    }
-
-    // TODO: Pull to cookie like vsl4?
-    i = dma_map_sg(&lsg->pci_dev->dev, lsg->sl, lsg->num_entries,
-                    dir == IODRIVE_DMA_DIR_READ ? DMA_FROM_DEVICE : DMA_TO_DEVICE);
-    lsg->num_mapped = i;
-    if (i < lsg->num_entries)
-    {
-        goto bail;
-    }
-
-
-    /*
-     * Fill in a map covering the whole scatter-gather list if caller is
-     * interested in the information.
-     */
     if (dmap != NULL)
     {
-        dmap->map_offset = 0;
-        dmap->map_length = lsg->sgl_size;
-        dmap->sge_count  = lsg->num_mapped;
-        dmap->sge_skip   = 0;
-        dmap->sge_trunc  = 0;
-        dmap->sge_first  = &lsg->sge[0];
-        dmap->sge_last   = &lsg->sge[lsg->num_mapped - 1];
-        dmap->lsg        = lsg;
+        memset(dmap, 0, sizeof(*dmap));
     }
-    return lsg->num_mapped;
+    if (dir != IODRIVE_DMA_DIR_READ && dir != IODRIVE_DMA_DIR_WRITE)
+    {
+        return -EINVAL;
+    }
+    if (lsg->num_entries == 0)
+    {
+        return 0;
+    }
 
-bail:
-    kfio_sgl_dma_unmap(sgl);
-    return -EINVAL;
+    count = dma_map_sg(&lsg->pci_dev->dev, lsg->sl, lsg->num_entries,
+                      dir == IODRIVE_DMA_DIR_READ ? DMA_FROM_DEVICE : DMA_TO_DEVICE);
+    if (count == 0)
+    {
+        return -EIO;
+    }
+    /* DMA mapping may coalesce input entries. Unmap still uses num_entries. */
+    lsg->pci_dir = dir;
+    lsg->num_mapped = count;
+    if (dmap != NULL)
+    {
+        dmap->map_length = lsg->sgl_size;
+        dmap->sge_count = count;
+        dmap->sge_first = &lsg->sge[0];
+        dmap->sge_last = &lsg->sge[count - 1];
+        dmap->lsg = lsg;
+    }
+    return count;
 }
 KFIO_EXPORT_SYMBOL(kfio_sgl_dma_map);
 
@@ -378,20 +380,11 @@ KFIO_EXPORT_SYMBOL(kfio_sgl_dma_map);
 int kfio_sgl_dma_unmap(kfio_sg_list_t *sgl)
 {
     struct linux_sgl *lsg = sgl;
-    int i;
 
-    for (i = 0; i < lsg->num_mapped; i++)
-    {
-        struct linux_sgentry *sge;
-        struct scatterlist *sl;
-
-        sge = &lsg->sge[i];
-        sl = &lsg->sl[i];
-    }
     if (lsg->num_mapped)
     {
         dma_unmap_sg(&lsg->pci_dev->dev, lsg->sl, lsg->num_entries,
-                 lsg->pci_dir == IODRIVE_DMA_DIR_READ ? DMA_FROM_DEVICE : DMA_TO_DEVICE);
+                     lsg->pci_dir == IODRIVE_DMA_DIR_READ ? DMA_FROM_DEVICE : DMA_TO_DEVICE);
     }
     lsg->num_mapped = 0;
     lsg->pci_dir = 0;
@@ -475,7 +468,7 @@ kfio_sgl_iter_t kfio_sgl_phys_first(kfio_sg_list_t *sgl, kfio_sgl_phys_t *segp)
         if (segp != NULL)
         {
             segp->addr = sg_dma_address(&lsg->sl[0]);
-            segp->len  = lsg->sl[0].length;
+            segp->len  = sg_dma_len(&lsg->sl[0]);
         }
         return &lsg->sge[0];
     }
@@ -498,7 +491,7 @@ kfio_sgl_iter_t kfio_sgl_phys_next(kfio_sg_list_t *sgl, kfio_sgl_iter_t iter, kf
             {
                 sl = sge_to_sl(lsg, sge);
                 segp->addr = sg_dma_address(sl);
-                segp->len  = sl->length;
+                segp->len  = sg_dma_len(sl);
             }
             return sge;
         }
@@ -540,79 +533,67 @@ void *kfio_sgl_get_byte_pointer(kfio_sg_list_t *sgl, uint32_t offset)
 
 kfio_dma_map_t *kfio_dma_map_alloc(int may_sleep, kfio_numa_node_t node)
 {
-    kfio_dma_map_t *dmap;
-
-    if (may_sleep)
+    if (node < 0 || node >= MAX_NUMNODES || !node_online(node))
     {
-        dmap = kfio_malloc_node(sizeof(*dmap), node);
+        node = NUMA_NO_NODE;
     }
-    else
-    {
-        dmap = kfio_malloc_atomic_node(sizeof(*dmap), node);
-    }
-    if (dmap != NULL)
-    {
-        kfio_memset(dmap, 0, sizeof(*dmap));
-    }
-    return dmap;
+    /* Map bookkeeping is never exposed to the device. Keep allocator provenance. */
+    return kzalloc_node(sizeof(kfio_dma_map_t), may_sleep ? GFP_NOIO : GFP_ATOMIC, node);
 }
 
 void kfio_dma_map_free(kfio_dma_map_t *dmap)
 {
-    if (dmap != NULL)
-    {
-        kfio_free(dmap, sizeof(*dmap));
-    }
+    kfree(dmap);
 }
 
 int kfio_sgl_dma_slice(kfio_sg_list_t *sgl, kfio_dma_map_t *dmap, uint32_t offset, uint32_t length)
 {
     struct linux_sgl *lsg = sgl;
-    uint32_t          i;
+    uint32_t i, remaining = length;
 
+    memset(dmap, 0, sizeof(*dmap));
+    if (offset > lsg->sgl_size || length > lsg->sgl_size - offset)
+    {
+        return -EINVAL;
+    }
     dmap->map_offset = offset;
     dmap->lsg = lsg;
+    if (length == 0)
+    {
+        return 0;
+    }
 
     for (i = 0; i < lsg->num_mapped; i++)
     {
-        struct linux_sgentry *sge = &lsg->sge[i];
-        struct scatterlist *sl = &lsg->sl[i];
+        uint32_t segment_length = sg_dma_len(&lsg->sl[i]);
+        uint32_t used;
 
-        if (offset < sl->length)
+        if (offset >= segment_length)
         {
-            dmap->sge_first = sge;
-            dmap->sge_last  = sge;
-
-            dmap->map_length = sl->length - offset;
-            dmap->sge_skip   = offset;
-            dmap->sge_count  = 1;
-            break;
+            offset -= segment_length;
+            continue;
         }
-
-        offset -= sl->length;
-    }
-
-    kassert(i < lsg->num_entries);
-    kassert(dmap->sge_first != NULL);
-
-    for (i = i + 1; i <= lsg->num_mapped; i++)
-    {
-        struct linux_sgentry *sge = &lsg->sge[i];
-        struct scatterlist *sl = &lsg->sl[i];
-
-        if (dmap->map_length >= length)
+        if (dmap->sge_count == 0)
         {
-            dmap->sge_trunc   = dmap->map_length - length;
-            dmap->map_length -= dmap->sge_trunc;
-            break;
+            dmap->sge_first = &lsg->sge[i];
+            dmap->sge_skip = offset;
         }
-        kassert(i < lsg->num_entries);
-        dmap->map_length += sl->length;
-        dmap->sge_last    = sge;
+        used = MIN(remaining, segment_length - offset);
+        dmap->sge_last = &lsg->sge[i];
         dmap->sge_count++;
+        remaining -= used;
+        if (remaining == 0)
+        {
+            dmap->sge_trunc = segment_length - offset - used;
+            dmap->map_length = length;
+            return 0;
+        }
+        offset = 0;
     }
 
-    return 0;
+    /* An unmapped or inconsistent list must never produce a partial DMA map. */
+    memset(dmap, 0, sizeof(*dmap));
+    return -EINVAL;
 }
 
 int kfio_dma_map_nvecs(kfio_dma_map_t *dmap)
@@ -637,7 +618,7 @@ kfio_sgl_iter_t kfio_dma_map_first(kfio_dma_map_t *dmap, kfio_sgl_phys_t *segp)
         {
             sl = sge_to_sl(dmap->lsg, sge);
             segp->addr = sg_dma_address(sl) + dmap->sge_skip;
-            segp->len  = sl->length - dmap->sge_skip;
+            segp->len  = sg_dma_len(sl) - dmap->sge_skip;
 
             if (sge == dmap->sge_last)
                 segp->len -= dmap->sge_trunc;
@@ -660,7 +641,7 @@ kfio_sgl_iter_t kfio_dma_map_next(kfio_dma_map_t *dmap, kfio_sgl_iter_t iter, kf
         if (segp != NULL)
         {
             segp->addr = sg_dma_address(sl);
-            segp->len  = sl->length;
+            segp->len  = sg_dma_len(sl);
 
             if (sge == dmap->sge_last)
                 segp->len -= dmap->sge_trunc;
@@ -737,12 +718,8 @@ int kfio_sgl_copy_data(kfio_sg_list_t *dst, kfio_sg_list_t *src, uint32_t length
 {
     struct linux_sgl *ldst = dst;
     struct linux_sgl *lsrc = src;
-
-    struct scatterlist   *ldst_sl = &ldst->sl[0];
-    struct scatterlist   *lsrc_sl = &lsrc->sl[0];
-
-    uint32_t ldst_sge_off = ldst_sl->offset;
-    uint32_t lsrc_sge_off = lsrc_sl->offset;
+    uint32_t dst_index = 0, src_index = 0;
+    uint32_t dst_offset = 0, src_offset = 0;
 
     if (length > ldst->sgl_size || length > lsrc->sgl_size)
     {
@@ -751,41 +728,48 @@ int kfio_sgl_copy_data(kfio_sg_list_t *dst, kfio_sg_list_t *src, uint32_t length
 
     while (length)
     {
-        int sub_length = length;
+        struct scatterlist *dst_sl, *src_sl;
+        uint32_t sub_length;
         void *pdst, *psrc;
 
-        sub_length = MIN(sub_length, ldst_sl->length - ldst_sge_off);
-        sub_length = MIN(sub_length, lsrc_sl->length - lsrc_sge_off);
+        /* Skip exhausted (including empty) entries without reading past the list. */
+        while (dst_index < ldst->num_entries && dst_offset == ldst->sl[dst_index].length)
+        {
+            dst_index++;
+            dst_offset = 0;
+        }
+        while (src_index < lsrc->num_entries && src_offset == lsrc->sl[src_index].length)
+        {
+            src_index++;
+            src_offset = 0;
+        }
+        if (dst_index == ldst->num_entries || src_index == lsrc->num_entries)
+        {
+            return -EFAULT;
+        }
+        dst_sl = &ldst->sl[dst_index];
+        src_sl = &lsrc->sl[src_index];
+        if (dst_sl->offset > FUSION_PAGE_SIZE || dst_sl->length > FUSION_PAGE_SIZE - dst_sl->offset ||
+            src_sl->offset > FUSION_PAGE_SIZE || src_sl->length > FUSION_PAGE_SIZE - src_sl->offset)
+        {
+            return -EFAULT;
+        }
+        sub_length = MIN(length, dst_sl->length - dst_offset);
+        sub_length = MIN(sub_length, src_sl->length - src_offset);
 
         preempt_disable();
-
-        // newer linux kernels do not require kmem_type_t argument
-        pdst = kmap_atomic(sg_page(ldst_sl));
-        psrc = kmap_atomic(sg_page(lsrc_sl));
-        kfio_memcpy(pdst + ldst_sge_off, psrc + lsrc_sge_off, sub_length);
+        pdst = kmap_atomic(sg_page(dst_sl));
+        psrc = kmap_atomic(sg_page(src_sl));
+        kfio_memcpy(pdst + dst_sl->offset + dst_offset,
+                    psrc + src_sl->offset + src_offset, sub_length);
         kunmap_atomic(psrc);
         kunmap_atomic(pdst);
-
         preempt_enable();
 
-        ldst_sge_off += sub_length;
-        lsrc_sge_off += sub_length;
-
-        if (ldst_sge_off == ldst_sl->length)
-        {
-            ldst_sl++;
-            ldst_sge_off = ldst_sl->offset;
-        }
-
-        if (lsrc_sge_off == lsrc_sl->length)
-        {
-            lsrc_sl++;
-            lsrc_sge_off = lsrc_sl->offset;
-        }
-
+        dst_offset += sub_length;
+        src_offset += sub_length;
         length -= sub_length;
     }
-
     return 0;
 }
 #endif

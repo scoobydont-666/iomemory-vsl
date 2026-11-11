@@ -94,11 +94,15 @@
 #endif /* KFIOC_X_GENHD_PART0_IS_A_POINTER */
 
 
+static inline int kfio_add_disk(struct gendisk *disk)
+{
 #if KFIOC_X_VOID_ADD_DISK
-#define ADD_DISK add_disk(disk->gd);
+    add_disk(disk);
+    return 0;
 #else
-#define ADD_DISK if (add_disk(disk->gd)) { infprint("Error while adding disk!"); }
-#endif /* KFIOC_X_VOID_ADD_DISK */
+    return add_disk(disk);
+#endif
+}
 
 #if KFIOC_X_DISK_HAS_OPEN_MUTEX
 #define SHUTDOWN_MUTEX &disk->gd->open_mutex

@@ -72,6 +72,7 @@ struct kfio_disk
     struct fio_device    *dev;
     struct gendisk       *gd;
     struct request_queue *rq;
+    bool                  registered;
     kfio_pci_dev_t       *pdev;
     fusion_spinlock_t    *queue_lock;
     struct bio           *bio_head;
@@ -103,7 +104,7 @@ int iodrive_barrier_sync = 0;
 
 extern int enable_discard;
 
-#define bio_flags(bio) ((bio)->bi_opf & REQ_OP_MASK)
+#define bio_flags(bio) ((bio)->bi_opf & ~REQ_OP_MASK)
 
 extern int kfio_sgl_map_bio(kfio_sg_list_t *sgl, struct bio *bio);
 
@@ -267,6 +268,7 @@ struct kfio_blk_add_disk_param
     struct fusion_work_struct work;
     struct kfio_disk *disk;
     bool              done;
+    int               error;
 };
 
 /*
@@ -277,7 +279,7 @@ static void kfio_blk_add_disk(fusion_work_struct_t *work)
     struct kfio_blk_add_disk_param *param = container_of(work, struct kfio_blk_add_disk_param, work);
     struct kfio_disk *disk = param->disk;
 
-    ADD_DISK
+    param->error = kfio_add_disk(disk->gd);
 
     /* Tell waiter we are done. */
     fusion_cv_lock_irq(&disk->state_lk);
@@ -293,10 +295,15 @@ int kfio_create_disk(struct fio_device *dev, kfio_pci_dev_t *pdev, uint32_t sect
 {
     struct kfio_disk     *dp;
     struct request_queue *rq;
+    int error;
     /*
      * We are not prepared to expose device kernel block layer cannot handle.
      */
-    if (sector_size < KERNEL_SECTOR_SIZE  || (sector_size & (sector_size - 1)) != 0)
+    *diskp = NULL;
+    if (use_workqueue < USE_QUEUE_NONE || use_workqueue >= USE_QUEUE_RQ ||
+        max_sectors_per_request == 0 || max_sectors_per_request > UINT_MAX / KERNEL_SECTOR_SIZE ||
+        max_sg_elements_per_request == 0 ||
+        sector_size < KERNEL_SECTOR_SIZE || (sector_size & (sector_size - 1)) != 0)
     {
         return -EINVAL;
     }
@@ -323,20 +330,22 @@ int kfio_create_disk(struct fio_device *dev, kfio_pci_dev_t *pdev, uint32_t sect
     atomic_set(&dp->lock_pending, 0);
     INIT_LIST_HEAD(&dp->retry_list);
 
-    if (!dp->gd) {
-        /* this is a somewhat strange condition, or is it */
-        dp->gd = BLK_ALLOC_DISK
-    }
-
-    if (use_workqueue != USE_QUEUE_RQ)
+    dp->gd = BLK_ALLOC_DISK
+    if (IS_ERR_OR_NULL(dp->gd))
     {
-        dp->rq = kfio_alloc_queue(dp, node);
-    }
-
-    if (dp->rq == NULL)
-    {
+        error = dp->gd ? PTR_ERR(dp->gd) : -ENOMEM;
+        dp->gd = NULL;
         kfio_destroy_disk(dp, destroy_type_normal);
-        return -ENOMEM;
+        return error;
+    }
+
+    dp->rq = kfio_alloc_queue(dp, node);
+    if (IS_ERR_OR_NULL(dp->rq))
+    {
+        error = dp->rq ? PTR_ERR(dp->rq) : -ENOMEM;
+        dp->rq = NULL;
+        kfio_destroy_disk(dp, destroy_type_normal);
+        return error;
     }
 
     rq = dp->rq;
@@ -364,19 +373,19 @@ int kfio_create_disk(struct fio_device *dev, kfio_pci_dev_t *pdev, uint32_t sect
 #ifdef QUEUE_FLAG_WC
     blk_queue_flag_set(QUEUE_FLAG_WC, rq);
 #else
-    blk_queue_flag_set(BLK_FEAT_WRITE_CACHE, rq);
+    rq->limits.features |= BLK_FEAT_WRITE_CACHE;
 #endif
 
 #ifdef QUEUE_FLAG_NONROT
     blk_queue_flag_set(QUEUE_FLAG_NONROT, rq);
 #else
-    blk_queue_flag_clear(BLK_FEAT_ROTATIONAL, rq);
+    rq->limits.features &= ~BLK_FEAT_ROTATIONAL;
 #endif
 
 #ifdef QUEUE_FLAG_ADD_RANDOM
     blk_queue_flag_clear(QUEUE_FLAG_ADD_RANDOM, rq);
 #else
-    blk_queue_flag_clear(BLK_FEAT_ADD_RANDOM, rq);
+    rq->limits.features &= ~BLK_FEAT_ADD_RANDOM;
 #endif
 
     *diskp = dp;
@@ -392,10 +401,9 @@ int kfio_expose_disk(kfio_disk_t *dp, char *name, int major, int disk_index,
 
     gd = dp->gd;
 
-    if (dp->gd == NULL)
+    if (IS_ERR_OR_NULL(gd) || IS_ERR_OR_NULL(dp->rq))
     {
-        kfio_destroy_disk(dp, destroy_type_normal);
-        return -ENOMEM;
+        return -ENODEV;
     }
     gd->major = major;
     gd->first_minor = FIO_NUM_MINORS * disk_index;
@@ -409,7 +417,7 @@ int kfio_expose_disk(kfio_disk_t *dp, char *name, int major, int disk_index,
 
     fio_bdev_ops.owner = THIS_MODULE;
 
-    strncpy(gd->disk_name, name, 32);
+    snprintf(gd->disk_name, sizeof(gd->disk_name), "%s", name);
 
     set_capacity(gd, reported_capacity * sector_size / KERNEL_SECTOR_SIZE);
 
@@ -426,6 +434,7 @@ int kfio_expose_disk(kfio_disk_t *dp, char *name, int major, int disk_index,
 
     param.disk = dp;
     param.done = false;
+    param.error = 0;
 
     fusion_schedule_work(&param.work);
 
@@ -439,80 +448,62 @@ int kfio_expose_disk(kfio_disk_t *dp, char *name, int major, int disk_index,
 
     fusion_destroy_work(&param.work);
 
-    /*
-     * The following is used because access to udev events are restricted
-     * to GPL licensed symbols.  Since we have a propriatary licence, we can't
-     * use the better interface.  Instead we must poll for the device creation.
-     */
-    fio_wait_for_dev(gd->disk_name);
+    if (param.error != 0)
+    {
+        return param.error;
+    }
+    dp->registered = true;
 
+    /* Device-node creation is userspace policy and is not disk registration. */
     return 0;
-}
-
-static void kfio_kill_requests(struct request_queue *q)
-{
 }
 
 void kfio_destroy_disk(kfio_disk_t *disk, destroy_type_t dt)
 {
-    if (disk->gd != NULL)
-    {
-        set_capacity(disk->gd, 0);
-
-        if (disk->queue_lock != NULL) {
-            fusion_spin_lock_irqsave(disk->queue_lock);
-        }
-
-        /* Stop delivery of new io from user. */
-        set_bit(QUEUE_FLAG_DYING, &disk->rq->queue_flags);
-
-        /*
-         * Prevent request_fn callback from interfering with
-         * the queue shutdown.
-         */
-        blk_mq_stop_hw_queues(disk->rq);
-        /*
-         * The queue is stopped and dead and no new user requests will be
-         * coming to it anymore. Fetch remaining already queued requests
-         * and fail them,
-         */
-        if (use_workqueue == USE_QUEUE_RQ)
-        {
-            kfio_kill_requests(disk->rq);
-        }
-        if (use_workqueue != USE_QUEUE_RQ)
-        {
-            /* Fail all bio's already on internal bio queue. */
-            struct bio *bio;
-
-            while ((bio = disk->bio_head) != NULL)
-            {
-                disk->bio_head = bio->bi_next;
-                __kfio_bio_complete(bio,  0, -EIO);
-            }
-            disk->bio_tail = NULL;
-        }
-
-        if (disk->queue_lock != NULL) {
-            fusion_spin_unlock_irqrestore(disk->queue_lock);
-        }
-
-        del_gendisk(disk->gd);
-
-        put_disk(disk->gd);
-        disk->gd = NULL;
-    }
+    struct bio *bio = NULL;
+    unsigned long flags;
 
     if (disk->rq != NULL)
     {
-        // blk_cleanup_queue(disk->rq);
-        disk->rq = NULL;
+        /* This is a bio queue, not blk-mq: there are no hardware queues to stop. */
+        spin_lock_irqsave(&disk->rq->queue_lock, flags);
+        set_bit(QUEUE_FLAG_DYING, &disk->rq->queue_flags);
+        bio = disk->bio_head;
+        disk->bio_head = disk->bio_tail = NULL;
+        spin_unlock_irqrestore(&disk->rq->queue_lock, flags);
     }
+    while (bio != NULL)
+    {
+        struct bio *next = bio->bi_next;
+        bio->bi_next = NULL;
+        __kfio_bio_complete(bio, 0, -EIO);
+        bio = next;
+    }
+
+    if (disk->gd != NULL)
+    {
+        if (disk->registered)
+        {
+            set_capacity(disk->gd, 0);
+            del_gendisk(disk->gd);
+            disk->registered = false;
+        }
+#if !KFIOC_X_BLK_ALLOC_DISK_EXISTS && !KFIOC_X_BLK_ALLOC_DISK_HAS_QUEUE_LIMITS
+        /* Older alloc_disk() did not own the separately allocated queue. */
+        if (disk->rq != NULL)
+        {
+            blk_cleanup_queue(disk->rq);
+        }
+#endif
+        put_disk(disk->gd);
+        disk->gd = NULL;
+    }
+    disk->rq = NULL;
 
     fusion_condvar_destroy(&disk->state_cv);
     fusion_cv_lock_destroy(&disk->state_lk);
 
-    // XXX Temporary workaround to avoid crashing on shutdown with LVM (see CRT-10)
+    /* Preserve the core's shutdown workaround; normal detach releases storage. */
     if (dt == destroy_type_normal)
     {
         kfio_free(disk, sizeof(*disk));
@@ -605,7 +596,7 @@ static inline void kfio_set_comp_cpu(kfio_bio_t *fbio, struct bio *bio)
 
 static unsigned long __kfio_bio_sync(struct bio *bio)
 {
-    return bio_flags(bio) == REQ_SYNC;
+    return (bio_flags(bio) & REQ_SYNC) != 0;
 }
 
 static void __kfio_bio_complete(struct bio *bio, uint32_t bytes_complete, int error)
@@ -647,7 +638,7 @@ static void kfio_bio_completor(kfio_bio_t *fbio, uint64_t bytes_complete, int er
         bio = next;
     } while (bio);
 
-    kassert(bytes_complete == bytes_completed);
+    kassert(error != 0 || bytes_complete == bytes_completed);
 }
 
 /*
@@ -661,7 +652,12 @@ static int kfio_kbio_add_bio(kfio_bio_t *fbio, struct bio *bio, uint32_t maxiosi
 {
     int error;
 
-    if (kfio_bio_is_discard(bio))
+    struct bio *first = (struct bio *)fbio->fbio_parameter;
+
+    if ((bio_op(bio) != REQ_OP_READ && bio_op(bio) != REQ_OP_WRITE) ||
+        (bio_flags(bio) & (REQ_PREFLUSH | REQ_FUA)) ||
+        (bio_flags(first) & (REQ_PREFLUSH | REQ_FUA)) ||
+        bio_flags(bio) != bio_flags(first))
     {
         return 1;
     }
@@ -729,42 +725,197 @@ static kfio_bio_t *kfio_map_to_fbio(struct request_queue *queue, struct bio *bio
 
     kfio_set_comp_cpu(fbio, bio);
 
-    if (kfio_bio_is_discard(bio))
+    switch (bio_op(bio))
     {
+    case REQ_OP_DISCARD:
         fbio->fbio_cmd = KBIO_CMD_DISCARD;
+        break;
+    case REQ_OP_FLUSH:
+        if (BI_SIZE(bio) != 0)
+        {
+            goto invalid;
+        }
+        fbio->fbio_cmd = KBIO_CMD_FLUSH;
+        fbio->fbio_flags = KBIO_FLG_SYNC;
+        break;
+    case REQ_OP_WRITE:
+        if (BI_SIZE(bio) == 0 && (bio_flags(bio) & (REQ_PREFLUSH | REQ_FUA)))
+        {
+            fbio->fbio_cmd = KBIO_CMD_FLUSH;
+            fbio->fbio_flags = KBIO_FLG_SYNC;
+            break;
+        }
+        fbio->fbio_cmd = KBIO_CMD_WRITE;
+        if (__kfio_bio_sync(bio))
+        {
+            fbio->fbio_flags |= KBIO_FLG_SYNC;
+        }
+        break;
+    case REQ_OP_READ:
+        if (bio_flags(bio) & (REQ_PREFLUSH | REQ_FUA))
+        {
+            goto invalid;
+        }
+        fbio->fbio_cmd = KBIO_CMD_READ;
+        break;
+    default:
+        goto invalid;
     }
-    else
+
+    if (fbio_need_dma_map(fbio) != IODRIVE_DMA_DIR_INVALID)
     {
-        if (bio_data_dir(bio) == WRITE)
-        {
-            fbio->fbio_cmd = KBIO_CMD_WRITE;
-
-            /* XXXKAN: Does sync make sense for reads? */
-            if (__kfio_bio_sync(bio) != 0)
-            {
-                fbio->fbio_flags |= KBIO_FLG_SYNC;
-            }
-        }
-        else
-        {
-            fbio->fbio_cmd = KBIO_CMD_READ;
-        }
-
         error = kfio_sgl_map_bio(fbio->fbio_sgl, bio);
         if (error != 0)
         {
-            /* This should not happen. */
-            kfio_bio_free(fbio);
-            return NULL;
+            goto invalid;
         }
     }
 
     return fbio;
+
+invalid:
+    kfio_bio_free(fbio);
+    return NULL;
+}
+
+/*
+ * A bio driver must implement both PREFLUSH and FUA. The proprietary core has
+ * an explicit zero-length FLUSH command; its BARRIER flag is not a documented
+ * equivalent of either Linux flag. Chain preflush -> data -> postflush instead.
+ * Allocate every stage before submission, and never touch a submitted fbio after
+ * kfio_bio_submit(): the core may complete and free it synchronously on failure.
+ */
+struct kfio_ordered_io
+{
+    struct bio *bio;
+    kfio_bio_t *preflush;
+    kfio_bio_t *data;
+    kfio_bio_t *postflush;
+};
+
+static void kfio_ordered_completor(kfio_bio_t *fbio, uint64_t bytes_complete, int error)
+{
+    struct kfio_ordered_io *io = (struct kfio_ordered_io *)fbio->fbio_parameter;
+    kfio_bio_t *next;
+
+    if (fbio == io->preflush)
+    {
+        io->preflush = NULL;
+        next = io->data;
+    }
+    else if (fbio == io->data)
+    {
+        io->data = NULL;
+        kfio_sgl_dma_unmap(fbio->fbio_sgl);
+        if (!error && bytes_complete != fbio->fbio_size)
+        {
+            error = -EIO;
+        }
+        next = io->postflush;
+    }
+    else
+    {
+        io->postflush = NULL;
+        next = NULL;
+    }
+
+    if (error)
+    {
+        /* Only stages not yet handed to the core are ours to release. */
+        if (io->data != NULL)
+        {
+            kfio_sgl_dma_unmap(io->data->fbio_sgl);
+            kfio_bio_free(io->data);
+        }
+        if (io->postflush != NULL)
+        {
+            kfio_bio_free(io->postflush);
+        }
+    }
+    else if (next != NULL)
+    {
+        kfio_bio_submit(next);
+        return;
+    }
+
+    __kfio_bio_complete(io->bio, BI_SIZE(io->bio), error);
+    kfree(io);
+}
+
+static kfio_bio_t *kfio_alloc_flush(kfio_bio_t *data, struct kfio_ordered_io *io)
+{
+    kfio_bio_t *flush = kfio_bio_try_alloc(data->fbio_dev);
+
+    if (flush != NULL)
+    {
+        flush->fbio_cmd = KBIO_CMD_FLUSH;
+        flush->fbio_size = 0;
+        flush->fbio_offset = 0;
+        flush->fbio_flags = KBIO_FLG_SYNC;
+        flush->fbio_cpu = data->fbio_cpu;
+        flush->fbio_completor = kfio_ordered_completor;
+        flush->fbio_parameter = (fio_uintptr_t)io;
+    }
+    return flush;
+}
+
+/* On failure, the original mapped fbio is still owned by the caller. */
+static kfio_bio_t *kfio_prepare_ordered_fbio(kfio_bio_t *fbio)
+{
+    struct bio *bio = (struct bio *)fbio->fbio_parameter;
+    struct kfio_ordered_io *io;
+
+    if (fbio->fbio_cmd != KBIO_CMD_WRITE || fbio->fbio_size == 0 ||
+        !(bio_flags(bio) & (REQ_PREFLUSH | REQ_FUA)))
+    {
+        return fbio;
+    }
+    io = kzalloc(sizeof(*io), GFP_ATOMIC);
+    if (io == NULL)
+    {
+        return NULL;
+    }
+    io->bio = bio;
+    io->data = fbio;
+    if (bio_flags(bio) & REQ_PREFLUSH)
+    {
+        io->preflush = kfio_alloc_flush(fbio, io);
+        if (io->preflush == NULL)
+        {
+            goto fail;
+        }
+    }
+    if (bio_flags(bio) & REQ_FUA)
+    {
+        io->postflush = kfio_alloc_flush(fbio, io);
+        if (io->postflush == NULL)
+        {
+            goto fail;
+        }
+    }
+    fbio->fbio_completor = kfio_ordered_completor;
+    fbio->fbio_parameter = (fio_uintptr_t)io;
+    return io->preflush != NULL ? io->preflush : fbio;
+
+fail:
+    if (io->preflush != NULL)
+    {
+        kfio_bio_free(io->preflush);
+    }
+    kfree(io);
+    return NULL;
+}
+
+/* Failure before core submission: finish every original bio, then free once. */
+static void kfio_fail_unsubmitted_fbio(kfio_bio_t *fbio, int error)
+{
+    kfio_bio_completor(fbio, fbio->fbio_size, error);
+    kfio_bio_free(fbio);
 }
 
 static kfio_bio_t *kfio_convert_bio(struct request_queue *queue, struct bio *bio)
 {
-    kfio_bio_t *fbio;
+    kfio_bio_t *fbio, *first;
     int dma_dir, error;
 
     fbio = kfio_map_to_fbio(queue, bio);
@@ -784,7 +935,16 @@ static kfio_bio_t *kfio_convert_bio(struct request_queue *queue, struct bio *bio
         }
     }
 
-    return fbio;
+    first = kfio_prepare_ordered_fbio(fbio);
+    if (first == NULL)
+    {
+        if (dma_dir != IODRIVE_DMA_DIR_INVALID)
+        {
+            kfio_sgl_dma_unmap(fbio->fbio_sgl);
+        }
+        kfio_bio_free(fbio);
+    }
+    return first;
 }
 
 /*
@@ -793,6 +953,7 @@ static kfio_bio_t *kfio_convert_bio(struct request_queue *queue, struct bio *bio
 static void kfio_fbio_map_submit(kfio_bio_t *fbio)
 {
     int dma_dir, error;
+    kfio_bio_t *first;
 
     dma_dir = fbio_need_dma_map(fbio);
     if (dma_dir != IODRIVE_DMA_DIR_INVALID)
@@ -800,12 +961,18 @@ static void kfio_fbio_map_submit(kfio_bio_t *fbio)
         error = kfio_sgl_dma_map(fbio->fbio_sgl, fbio->fbio_dmap, dma_dir);
         if (error < 0)
         {
-            kfio_bio_free(fbio);
+            kfio_fail_unsubmitted_fbio(fbio, error);
             return;
         }
     }
 
-    kfio_bio_submit(fbio);
+    first = kfio_prepare_ordered_fbio(fbio);
+    if (first == NULL)
+    {
+        kfio_fail_unsubmitted_fbio(fbio, -ENOMEM);
+        return;
+    }
+    kfio_bio_submit(first);
 }
 
 static void kfio_kickoff_plugged_io(struct request_queue *q, struct bio *bio, uint32_t maxiosize)
@@ -865,7 +1032,7 @@ static int kfio_bio_should_submit_now(struct bio *bio)
      * requests too, as some "special" requests (such as a FLUSH) suffer
      * from the same bug.
      */
-    if (!BI_SIZE(bio))
+    if (!BI_SIZE(bio) || (bio_flags(bio) & (REQ_PREFLUSH | REQ_FUA)))
     {
         return 1;
     }
@@ -972,17 +1139,19 @@ static struct request_queue *kfio_alloc_queue(struct kfio_disk *dp,
 {
     struct request_queue *rq;
 
+    if (IS_ERR_OR_NULL(dp->gd))
+    {
+        return ERR_PTR(dp->gd ? PTR_ERR(dp->gd) : -ENOMEM);
+    }
     test_safe_plugging();
     rq = BLK_ALLOC_QUEUE;
-    if (rq != NULL)
+    if (!IS_ERR_OR_NULL(rq))
     {
         rq->queuedata = dp;
 #if KFIOC_X_HAS_MAKE_REQUEST_FN
         blk_queue_make_request(rq, kfio_make_request);
 #endif
-        // TODO:
-        // rq->queue_lock = (spinlock_t *)dp->queue_lock;
-        memcpy(&dp->queue_lock, &rq->queue_lock, sizeof(dp->queue_lock));
+        /* Keep the core lock pointer intact; native queue locking uses rq->queue_lock. */
     }
     return rq;
 }
