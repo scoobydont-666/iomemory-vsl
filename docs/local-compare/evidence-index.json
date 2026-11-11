@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "scope": "git-source-only",
+  "commits": {
+    "baseline": "13145f4abf6caa575c1dcb149925bef7a90e7f1f",
+    "original_snapshot": "26ab52e788093fda314b112bf3f42ecdcd432689",
+    "latest_snapshot": "9d3c88e8f9a6044a307bf16301871883fdb93ece",
+    "published_historical": "9328703e657943f1b15c0e94adc06762f3d22856",
+    "previous_candidate": "3325362db7016f1ab9185fa7f47087f3600a9c95"
+  },
+  "historical_tree": "31922027d7a0a28752311b400838561b64df2168",
+  "historical_parent": "d171d8b16fb04f2218586335a98c2099a2dfc7b0",
+  "snapshot_unchanged_paths": ["root", "Makefile"],
+  "snapshot_update_paths": ["docs/local-compare/README.md"],
+  "historical_equal_paths": [
+    "root/usr/src/iomemory-vsl-3.2.16/kinfo.c",
+    "root/usr/src/iomemory-vsl-3.2.16/kblock.c",
+    "root/usr/src/iomemory-vsl-3.2.16/kscatter.c"
+  ],
+  "preserved_evidence": [
+    {
+      "source": "docs/local-compare/build-make.log",
+      "destination": "docs/local-compare/build-make.log",
+      "mode": "100644"
+    },
+    {
+      "source": "docs/local-compare/fio-status-a.sanitized.txt",
+      "destination": "docs/local-compare/fio-status-a.sanitized.txt",
+      "mode": "100644"
+    },
+    {
+      "source": "docs/local-compare/installed-dkms",
+      "destination": "docs/local-compare/installed-dkms",
+      "mode": "040000"
+    },
+    {
+      "source": "docs/local-compare/patches",
+      "destination": "docs/local-compare/patches",
+      "mode": "040000"
+    },
+    {
+      "source": "load-fio-driver.sh",
+      "destination": "docs/local-compare/load-fio-driver.sh.txt",
+      "mode": "100644"
+    }
+  ],
+  "reconstruction_record": "docs/local-compare/reconstruction.json"
+}

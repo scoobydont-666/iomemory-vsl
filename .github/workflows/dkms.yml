@@ -18,6 +18,18 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+      - name: Verify pinned source evidence without activating historical code
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build-evidence
+          # Validate full object IDs before using them as fetch arguments.
+          # Fetch objects only: never check out or execute an evidence branch.
+          python3 tools/verify_source_evidence.py --list-commits > "$RUNNER_TEMP/evidence-commits.txt"
+          while IFS= read -r revision; do
+            git fetch --no-tags --depth=1 origin "$revision"
+          done < "$RUNNER_TEMP/evidence-commits.txt"
+          python3 tools/verify_source_evidence.py | tee build-evidence/source-reconciliation.json
       - name: Offline lifecycle and failure-path tests
         shell: bash
         run: |
