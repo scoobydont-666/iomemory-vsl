@@ -15,6 +15,7 @@ not a generic Ubuntu headers package.
 From a clean, committed checkout of the **reviewed source revision**:
 
 ```sh
+python3 tools/verify_binary_artifacts.py
 sudo make dkms
 # Alternatively, build for an installed, not necessarily running kernel:
 sudo make dkms KERNELVER=YOUR_TARGET_KERNEL_RELEASE
@@ -51,6 +52,14 @@ the defaults (`/usr/src`, `/var/lib/dkms`, `/usr/lib/fio`) unless the system's
 DKMS configuration and kernel hooks are deliberately configured to match.
 Filesystem permissions and DKMS enforce write privileges; use sudo for normal
 system installation.
+
+For the normal `/usr/lib/fio` destination, installation also installs the committed
+`/etc/ld.so.conf.d/fio.conf` and runs `ldconfig`; a failure is reported. A custom
+`DKMS_LIB_DIR` requires a separately managed loader search path. Before replacing
+an existing `libvsl.so`, the installer retains its bytes under
+`DKMS_STATE_TREE/libvsl-backups/SHA256.so`, then atomically replaces the library.
+Library rollback is an explicit operator action, independent of kernel-module
+rollback; the library is shared across installed kernel versions.
 
 ## Before rebooting into a new kernel
 
@@ -121,6 +130,21 @@ runner with read-only repository permissions, never a self-hosted storage host.
 A workflow definition is not a passing run. Review the actual run before merge.
 Hardware load, attach, I/O integrity, Secure Boot, initramfs and reboot validation
 remain necessary on representative machines; CI does not perform them.
+
+The full regression command is `python3 -m unittest discover -s tests -p 'test_*.py' -v`.
+The `Driver contracts and DKMS builds` workflow covers PRs and pushes to `main`,
+retaining exact-candidate tests, headers, module metadata, and build diagnostics.
+All supported `all`, `gpl`, `modules`, and `modules_install` entry points converge
+on the same validated artifact path; packages invoke that path too. Generated
+version metadata is linked into the module before signing. The retired
+`fake_license`, legacy `module_operations.sh`, and EFI helper refuse execution.
+The existing module license tag does not establish the terms or source status
+of core objects; see [binary assurance](docs/binary-assurance.md).
+
+See [the remediation record](docs/security-modernization-2026-11-11.md) and
+[qualification matrix](docs/qualification.md) before treating a candidate as a
+release. Additional maintainer local-source and firmware evidence is pending
+comparison with the reviewed GitHub baseline.
 
 Reference: the DKMS project's `dkms(8)` documentation, especially `add`, `build`,
 `install`, `autoinstall`, `DKMS.CONF`, and `DKMS.CONF VARIABLES`:
