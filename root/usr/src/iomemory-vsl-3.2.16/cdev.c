@@ -204,14 +204,8 @@ int fusion_create_control_device(struct fusion_nand_device *nand_dev)
         return result;
     }
 
-#if !defined(__TENCENT_KERNEL__)
-    result = fio_wait_for_dev(fusion_nand_get_dev_name(nand_dev));
-    if (result != 0)
-    {
-        misc_deregister(misc);
-        return result;
-    }
-#endif
+    /* misc_register() establishes kernel registration. /dev may not yet be
+     * mounted during early boot; userspace node creation must not gate it. */
 
     return result;
 }

@@ -401,7 +401,8 @@ int fio_wait_for_dev(const char *devname)
         rc = kern_path(abs_filename, LOOKUP_FOLLOW, &path);
         if (rc == 0)
         {
-            rc = S_ISCHR(d_inode(path.dentry)->i_mode) ? 0 : -ENODEV;
+            rc = (S_ISCHR(d_inode(path.dentry)->i_mode) ||
+                  S_ISBLK(d_inode(path.dentry)->i_mode)) ? 0 : -ENODEV;
             path_put(&path);
             return rc;
         }

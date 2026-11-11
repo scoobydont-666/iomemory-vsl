@@ -52,6 +52,8 @@ int main(int argc,char **argv) {
         remaining_misses=2;
         assert(fio_wait_for_dev("fct0")==0);
         assert(path_calls==3 && sleeps==2 && refs==0);
+        inode.i_mode=S_IFBLK;
+        assert(fio_wait_for_dev("fct0")==0 && refs==0);
     } else if(!strcmp(argv[1],"timeout")) {
         remaining_misses=20;
         assert(fio_wait_for_dev("fct0")==-ETIMEDOUT);
@@ -113,9 +115,10 @@ int main(int argc,char **argv) {
         assert(fusion_create_control_device(&n)==-ENOMEM && waits==0 && deregisters==0);
     } else if(!strcmp(argv[1],"readiness")) {
         wait_error=-ETIMEDOUT;
-        assert(fusion_create_control_device(&n)==-ETIMEDOUT && waits==1 && deregisters==1 && !n.misc.live);
+        assert(fusion_create_control_device(&n)==0 && waits==0 && deregisters==0 && n.misc.live);
+        assert(fusion_destroy_control_device(&n)==0 && deregisters==1);
     } else if(!strcmp(argv[1],"success")) {
-        assert(fusion_create_control_device(&n)==0 && waits==1 && n.misc.live);
+        assert(fusion_create_control_device(&n)==0 && waits==0 && n.misc.live);
         assert(fusion_destroy_control_device(&n)==0 && deregisters==1 && !n.misc.live);
     } else abort();
     return 0;
@@ -165,7 +168,7 @@ class ControlDeviceLifecycle(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_failed_registration_does_not_wait(self): self.run_case("registration")
-    def test_readiness_failure_unwinds_registration(self): self.run_case("readiness")
+    def test_registration_does_not_require_dev_mount(self): self.run_case("readiness")
     def test_success_and_destroy(self): self.run_case("success")
 
 
