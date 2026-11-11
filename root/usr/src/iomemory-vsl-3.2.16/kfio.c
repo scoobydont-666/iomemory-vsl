@@ -31,6 +31,7 @@
 #endif
 
 #include <linux/types.h>
+#include <linux/limits.h>
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/buffer_head.h>
@@ -379,28 +380,49 @@ int fio_wait_for_dev(const char *devname)
 {
     char abs_filename[UFIO_DEVICE_FILE_MAX_LEN];
     struct path path;
-    int i = 0;
+    int timeout = READ_ONCE(fio_dev_wait_timeout_secs);
+    int remaining;
+    int rc;
 
-    snprintf(abs_filename, sizeof(abs_filename) - 1,
-            "%s%s", UFIO_CONTROL_DEVICE_PATH, devname);
-
-    while ((kern_path(abs_filename, LOOKUP_PARENT, &path) != 0) &&
-          (i < fio_dev_wait_timeout_secs * 10))
+    if (timeout < 0 || timeout > INT_MAX / 10)
     {
-        if (i == 0)
+        return -EINVAL;
+    }
+    rc = snprintf(abs_filename, sizeof(abs_filename),
+                  "%s%s", UFIO_CONTROL_DEVICE_PATH, devname);
+    if (rc < 0 || rc >= (int)sizeof(abs_filename))
+    {
+        return -ENAMETOOLONG;
+    }
+
+    remaining = timeout * 10;
+    for (;;)
+    {
+        rc = kern_path(abs_filename, LOOKUP_FOLLOW, &path);
+        if (rc == 0)
+        {
+            rc = S_ISCHR(d_inode(path.dentry)->i_mode) ? 0 : -ENODEV;
+            path_put(&path);
+            return rc;
+        }
+        if (rc != -ENOENT && rc != -ENOTDIR)
+        {
+            return rc;
+        }
+        if (remaining == 0)
+        {
+            infprint("warning: timeout on device %s creation\n", devname);
+            return -ETIMEDOUT;
+        }
+        if (remaining == timeout * 10)
         {
             infprint("Waiting for %s to be created\n", abs_filename);
         }
-        msleep(100);  // Sleep 100msecs
-        i++;
+        msleep(100);
+        remaining--;
     }
-
-    if(i >= fio_dev_wait_timeout_secs * 10)
-    {
-        infprint("warning: timeout on device %s creation\n", devname);
-    }
-    return 0;
 }
+
 KFIO_EXPORT_SYMBOL(fio_wait_for_dev);
 
 
