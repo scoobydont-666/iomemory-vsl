@@ -201,12 +201,11 @@ int fusion_create_control_device(struct fusion_nand_device *nand_dev)
         errprint("%s Unable to initialize misc device '%s'\n",
                 fusion_nand_get_bus_name(nand_dev),
                 fusion_nand_get_dev_name(nand_dev));
+        return result;
     }
 
-// TODO: TENCENT_KERNEL heh
-#if !defined(__TENCENT_KERNEL__)
-    fio_wait_for_dev(fusion_nand_get_dev_name(nand_dev));
-#endif
+    /* misc_register() establishes kernel registration. /dev may not yet be
+     * mounted during early boot; userspace node creation must not gate it. */
 
     return result;
 }

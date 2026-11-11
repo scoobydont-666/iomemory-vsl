@@ -103,6 +103,7 @@ build-arch-stamp: configure-stamp
 		-C driver_source \
 		KERNELVER=$(deb_kernel_version) \
 		FIO_DRIVER_NAME=$(fio_driver_name) \
+		MODULE_VERSION=$(fio_version) \
 		$(firehose_shipped_object) \
 		modules; then \
 		printf "ERROR:\n"; \

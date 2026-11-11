@@ -1,0 +1,93 @@
+{
+  "snapshot": "26ab52e788093fda314b112bf3f42ecdcd432689",
+  "baseline": "13145f4abf6caa575c1dcb149925bef7a90e7f1f",
+  "reconstructed_claimed_source_tree": "31922027d7a0a28752311b400838561b64df2168",
+  "candidate": "af839defc67dda64f16c5e9f5fb7263dad433d28",
+  "hashes": {
+    "root/usr/src/iomemory-vsl-3.2.16/kfio/x86_64_latest_libkfio.o_shipped": {
+      "loaded_reconstruction": "61ee1425207b317c9c327c7c9080ab201fdd01625a6138d893abd63d42021a4d",
+      "baseline": "61ee1425207b317c9c327c7c9080ab201fdd01625a6138d893abd63d42021a4d",
+      "snapshot": "61ee1425207b317c9c327c7c9080ab201fdd01625a6138d893abd63d42021a4d",
+      "candidate": "61ee1425207b317c9c327c7c9080ab201fdd01625a6138d893abd63d42021a4d"
+    },
+    "root/usr/src/iomemory-vsl-3.2.16/kfio/x86_64_cc63_libkfio.o_shipped": {
+      "loaded_reconstruction": "61ee1425207b317c9c327c7c9080ab201fdd01625a6138d893abd63d42021a4d",
+      "baseline": "61ee1425207b317c9c327c7c9080ab201fdd01625a6138d893abd63d42021a4d",
+      "snapshot": "61ee1425207b317c9c327c7c9080ab201fdd01625a6138d893abd63d42021a4d",
+      "candidate": "61ee1425207b317c9c327c7c9080ab201fdd01625a6138d893abd63d42021a4d"
+    },
+    "root/usr/lib/fio/libvsl.so": {
+      "loaded_reconstruction": "0a57f8e2090841019c7e2cf1a6b5bb5ca61ba5a89be6c7cdac5236d68e7ee14d",
+      "baseline": "0a57f8e2090841019c7e2cf1a6b5bb5ca61ba5a89be6c7cdac5236d68e7ee14d",
+      "snapshot": "0a57f8e2090841019c7e2cf1a6b5bb5ca61ba5a89be6c7cdac5236d68e7ee14d",
+      "candidate": "0a57f8e2090841019c7e2cf1a6b5bb5ca61ba5a89be6c7cdac5236d68e7ee14d"
+    },
+    "root/usr/src/iomemory-vsl-3.2.16/pci.c": {
+      "loaded_reconstruction": "03ef4e0b14cbe525cbde5d76e1eca57432f01e7bcbf37bccecfc1529e5d179a0",
+      "baseline": "d67bb724beeee50aa3d8bd0fee8d11f27a0de4379c31d3d90b45f77383d4341e",
+      "snapshot": "d67bb724beeee50aa3d8bd0fee8d11f27a0de4379c31d3d90b45f77383d4341e",
+      "candidate": "569d10a1f3274423447b2bbb35c1e2a85f3fd00cfd11cd1679d86b68a2c41d24"
+    },
+    "root/usr/src/iomemory-vsl-3.2.16/kmem.c": {
+      "loaded_reconstruction": "3fa693c62dd7ceef4d7c3a7d34c4ea09a02d441b71ba69d68097532c8409b964",
+      "baseline": "045c22b01af3e5e414ba778b00cd1cedbeb7a377bc2957cb999360f963168289",
+      "snapshot": "045c22b01af3e5e414ba778b00cd1cedbeb7a377bc2957cb999360f963168289",
+      "candidate": "0102a7a3a338390fbed9977654bc91ec5b94038d89c9d990e4c6de04bb2860b9"
+    },
+    "root/usr/src/iomemory-vsl-3.2.16/kblock.c": {
+      "loaded_reconstruction": "e668e0e77de35bd13bb85039b128cad0b732e0348de2b5cc5d55d4c15824a238",
+      "baseline": "e668e0e77de35bd13bb85039b128cad0b732e0348de2b5cc5d55d4c15824a238",
+      "snapshot": "e668e0e77de35bd13bb85039b128cad0b732e0348de2b5cc5d55d4c15824a238",
+      "candidate": "cc6477be6372368aef5f34daeeac010abfbf1d1d255e23ea652f89bca4e41516"
+    },
+    "root/usr/src/iomemory-vsl-3.2.16/kscatter.c": {
+      "loaded_reconstruction": "0cfd5597e7126252c3726fbf474b94d4c08205e1b868c0b1d89d0959cd1ab5b4",
+      "baseline": "0cfd5597e7126252c3726fbf474b94d4c08205e1b868c0b1d89d0959cd1ab5b4",
+      "snapshot": "0cfd5597e7126252c3726fbf474b94d4c08205e1b868c0b1d89d0959cd1ab5b4",
+      "candidate": "c71ab49fa2f6d3cc62e89bddbcd5ff53f11e7e000aa1605d77a34b41c283f878"
+    },
+    "root/usr/src/iomemory-vsl-3.2.16/kinfo.c": {
+      "loaded_reconstruction": "79011030d6f74b2361b5c42bc03077cd5f29dffc246b0e8a67bdbb3941e0e1e4",
+      "baseline": "79011030d6f74b2361b5c42bc03077cd5f29dffc246b0e8a67bdbb3941e0e1e4",
+      "snapshot": "79011030d6f74b2361b5c42bc03077cd5f29dffc246b0e8a67bdbb3941e0e1e4",
+      "candidate": "842856f635840fc0b395fd4cf99d8175e5b897a1fc883ee0993a39223bf16ce3"
+    },
+    "root/usr/share/doc/iomemory-vsl/License": {
+      "loaded_reconstruction": "9e7915915dce0456ef9ba8920defd3736856ce92d7a7ea02157122e74028ea38",
+      "baseline": "9e7915915dce0456ef9ba8920defd3736856ce92d7a7ea02157122e74028ea38",
+      "snapshot": "9e7915915dce0456ef9ba8920defd3736856ce92d7a7ea02157122e74028ea38",
+      "candidate": "9e7915915dce0456ef9ba8920defd3736856ce92d7a7ea02157122e74028ea38"
+    },
+    "root/usr/share/doc/iomemory-vsl/NOTICE.iomemory-vsl": {
+      "loaded_reconstruction": "8fc37945f0c5b95fe5dc6de5765f8297a3b8f9b95ad0e157eced41b4e0c6a113",
+      "baseline": "8fc37945f0c5b95fe5dc6de5765f8297a3b8f9b95ad0e157eced41b4e0c6a113",
+      "snapshot": "8fc37945f0c5b95fe5dc6de5765f8297a3b8f9b95ad0e157eced41b4e0c6a113",
+      "candidate": "8fc37945f0c5b95fe5dc6de5765f8297a3b8f9b95ad0e157eced41b4e0c6a113"
+    },
+    "root/usr/share/doc/fio/NOTICE.libvsl": {
+      "loaded_reconstruction": "fdaeac4ecc9339ef32a2f718cef6f142d9037c51770a88afdc3514a816b36020",
+      "baseline": "fdaeac4ecc9339ef32a2f718cef6f142d9037c51770a88afdc3514a816b36020",
+      "snapshot": "fdaeac4ecc9339ef32a2f718cef6f142d9037c51770a88afdc3514a816b36020",
+      "candidate": "fdaeac4ecc9339ef32a2f718cef6f142d9037c51770a88afdc3514a816b36020"
+    }
+  },
+  "patch_ids": {
+    "docs/local-compare/patches/reflog-only-numa1-dma32/0001-1226c3e.patch": "7d38ebeb055b0104e99f6dfd726526f59320d7a9",
+    "docs/local-compare/patches/reflog-only-numa1-dma32/0002-b9b4603.patch": "5c18f33b2e27ab9c28bbc7156be96234352877e3",
+    "docs/local-compare/patches/reflog-only-numa1-dma32/0003-3a2fd72.patch": "dcc62fab2e8e70d62dd21074d20b3eb9df11029a",
+    "docs/local-compare/patches/reflog-only-numa1-dma32/0004-58941b7.patch": "dcc62fab2e8e70d62dd21074d20b3eb9df11029a",
+    "docs/local-compare/patches/reflog-only-task15303-objtool/0001-ca4c075.patch": "500efa3d32c0165a433a31136e1d7ae8daeae28b",
+    "docs/local-compare/patches/reflog-only-task15303-objtool/0002-6b00e51.patch": "99973b6f9de792ad34e21f88f7a21df1c0202eab",
+    "docs/local-compare/patches/reflog-only-task15303-objtool/0003-60b5e71.patch": "99973b6f9de792ad34e21f88f7a21df1c0202eab",
+    "eb33cb2": "500efa3d32c0165a433a31136e1d7ae8daeae28b",
+    "dd0c13b": "99973b6f9de792ad34e21f88f7a21df1c0202eab",
+    "6cd7867": "d145219f30e27ca1040f1a96bf6fefaf05b9320d"
+  },
+  "diff_loaded_baseline": ".github/workflows/dkms.yml                         |  47 +++\n .gitignore                                         |   1 +\n DKMS.md                                            | 127 ++++++++\n Makefile                                           |   2 +-\n docs/upstream/README.md                            |  41 +++\n docs/upstream/dkms-pr.md                           |  45 +++\n docs/upstream/numa-review.md                       |  10 +\n root/usr/src/iomemory-vsl-3.2.16/Makefile          |  26 +-\n .../iomemory-vsl-3.2.16/check_target_kernel.conf   |   2 -\n root/usr/src/iomemory-vsl-3.2.16/dkms-install.sh   |  79 +++++\n root/usr/src/iomemory-vsl-3.2.16/dkms.conf         |  14 +-\n root/usr/src/iomemory-vsl-3.2.16/driver_init.c     |   8 +\n root/usr/src/iomemory-vsl-3.2.16/kmem.c            | 103 +++++-\n root/usr/src/iomemory-vsl-3.2.16/objtool_wrapper   |  40 ++-\n root/usr/src/iomemory-vsl-3.2.16/pci.c             | 117 +++++--\n tests/test_dkms.py                                 | 219 +++++++++++++\n tests/test_dma32_alloc.py                          | 357 +++++++++++++++++++++\n 17 files changed, 1178 insertions(+), 60 deletions(-)",
+  "diff_loaded_remote_old_tip": "root/usr/src/iomemory-vsl-3.2.16/objtool_wrapper | 40 ++++++++++++++++++++++--\n 1 file changed, 38 insertions(+), 2 deletions(-)",
+  "published_candidate": "547fc5432e34dda6927e09cbd56c3f23620abb67",
+  "published_candidate_tree": "162194aad659215fde07696226941e88c86b6f2e",
+  "reconstruction_parent": "d171d8b16fb04f2218586335a98c2099a2dfc7b0",
+  "reconstruction_patch": "docs/local-compare/patches/reflog-only-task15303-objtool/0001-ca4c075.patch",
+  "scope": "Git source/blob comparison; supplied runtime observations do not prove the exact loaded module bytes."
+}

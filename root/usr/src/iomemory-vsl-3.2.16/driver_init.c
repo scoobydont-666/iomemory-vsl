@@ -59,11 +59,12 @@ KFIO_MODULE_PARAM(dma32_clamp, int, S_IRUGO);
 KFIO_MODULE_PARAM_DESC(dma32_clamp, "Clamp device DMA addressing to 32 bits: 1 = clamp (default, NUMA1 attach fix), 0 = use the full mask the hardware supports");
 
 int         sure_erase_mode = FIO_SURE_ERASE_MODE_DEFAULT;
-KFIO_MODULE_PARAM(sure_erase_mode, int, S_IRUGO | S_IWUSR);
-KFIO_MODULE_PARAM_DESC(sure_erase_mode, "Ignore calls that disturb fio-sure-erase with secure kernels, disables auto_attach.");
+KFIO_MODULE_PARAM(sure_erase_mode, int, S_IRUGO);
+KFIO_MODULE_PARAM_DESC(sure_erase_mode, "Load-only maintenance mode: 0 = normal, 1 = sure-erase workaround with auto_attach disabled");
 
 int use_workqueue = USE_QUEUE_NONE;
-KFIO_MODULE_PARAM(use_workqueue, int, S_IRUGO | S_IWUSR);
+KFIO_MODULE_PARAM(use_workqueue, int, S_IRUGO);
+KFIO_MODULE_PARAM_DESC(use_workqueue, "Load-only submission mode: 0 = direct, 1 = workqueue, 2 = single thread; other values unsupported");
 
 /**
  * @}

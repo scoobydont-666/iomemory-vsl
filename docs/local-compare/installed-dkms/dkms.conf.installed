@@ -1,0 +1,11 @@
+PACKAGE_NAME=iomemory-vsl
+PACKAGE_VERSION=1794116140.13145f4abf6c
+BUILT_MODULE_NAME=iomemory-vsl
+BUILT_MODULE_LOCATION=''
+DEST_MODULE_LOCATION=/kernel/drivers/block
+# Use the same target as make module, including branch-specific build steps.
+# Quoting make suppresses DKMS's KERNELRELEASE injection; this wrapper sets it.
+# Keep wrapper prerequisites serial; its kernel submake supplies parallelism.
+MAKE="'make' -j1 gpl DKMS_KERNEL_VERSION='${kernelver}' KERNEL_BUILD='${kernel_source_dir}' MODULE_VERSION='${PACKAGE_VERSION}' FIO_DKMS_BUILD=1"
+CLEAN="'make' clean DKMS_KERNEL_VERSION='${kernelver}' KERNEL_BUILD='${kernel_source_dir}'"
+AUTOINSTALL="yes"

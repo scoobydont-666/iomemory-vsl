@@ -1,28 +1,43 @@
-name: DKMS lifecycle
+name: Driver contracts and DKMS builds
 on:
   pull_request:
-    paths:
-      - 'Makefile'
-      - 'root/usr/src/**'
-      - 'tests/**'
-      - '.github/workflows/dkms.yml'
+  push:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: dkms-${{ github.event.pull_request.number || github.ref }}
+  # New stable namespace isolates runs from the stranded pre-incident group.
+  # All checks remain mandatory; this does not select self-hosted storage hosts.
+  group: driver-qualification-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
   dkms:
-    # Public PR code must not run on a persistent/self-hosted storage machine.
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, node24
         with:
           persist-credentials: false
+      - name: Verify pinned source evidence without activating historical code
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build-evidence
+          git rev-parse HEAD > build-evidence/source-revision.txt
+          # Only validated full commit IDs; never check out supplied branches.
+          python3 tools/verify_source_evidence.py --list-commits > "$RUNNER_TEMP/evidence-commits.txt"
+          while IFS= read -r revision; do
+            git fetch --no-tags --depth=1 origin "$revision"
+          done < "$RUNNER_TEMP/evidence-commits.txt"
+          python3 tools/verify_source_evidence.py | tee build-evidence/source-reconciliation.json
       - name: Offline lifecycle and failure-path tests
-        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/verify_binary_artifacts.py | tee build-evidence/binary-verification.txt
+          python3 -m unittest discover -s tests -p 'test_*.py' -v 2>&1 | tee build-evidence/offline-tests.log
+          while IFS= read -r -d '' file; do bash -n "$file"; done < <(git ls-files -z '*.sh' '*objtool_wrapper' '*dkms.conf')
       - name: Install DKMS and two header families (no kernel images)
         run: |
           sudo apt-get update
@@ -36,6 +51,7 @@ jobs:
           first=${kernels[0]}
           second=${kernels[${#kernels[@]}-1]}
           test "$first" != "$second"
+          printf '%s\n' "${kernels[@]}" > "$GITHUB_WORKSPACE/build-evidence/header-releases.txt"
           sudo make dkms KERNELVER="$first"
           sudo make dkms KERNELVER="$first"
           first_version=$(modinfo -k "$first" -F version iomemory-vsl)
@@ -44,4 +60,68 @@ jobs:
           dkms status -m iomemory-vsl -k "$second" | grep -E ': installed$'
           test "$(modinfo -k "$second" -F vermagic iomemory-vsl | awk '{print $1}')" = "$second"
           test "$(modinfo -k "$second" -F version iomemory-vsl)" = "$first_version"
-          # Do not load/unload modules, attach/format devices, or reboot.
+          grep -Fx /usr/lib/fio /etc/ld.so.conf.d/fio.conf
+          ldconfig -p | grep -F libvsl.so
+          for kernel in "$first" "$second"; do
+            modinfo -k "$kernel" iomemory-vsl > "$GITHUB_WORKSPACE/build-evidence/module-$kernel.txt"
+          done
+          # No module load/unload, device attach/format, or reboot.
+      - name: Build manual artifact and compare with installed metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          second=$(tail -n 1 "$GITHUB_WORKSPACE/build-evidence/header-releases.txt")
+          version=$(modinfo -k "$second" -F version iomemory-vsl)
+          manual="$RUNNER_TEMP/iomemory-manual"
+          mkdir -p "$manual"
+          sudo cp -a "/usr/src/iomemory-vsl-$version/." "$manual/"
+          sudo chown -R "$(id -u):$(id -g)" "$manual"
+          test ! -d "$manual/.git"
+          make -C "$manual" modules KERNELVER="$second" \
+            KERNEL_BUILD="/lib/modules/$second/build" MODULE_VERSION="$version" NCPUS=2 \
+            2>&1 | tee "$GITHUB_WORKSPACE/build-evidence/manual-build.log"
+          test "$(modinfo -F version "$manual/iomemory-vsl.ko")" = "$version"
+          test "$(modinfo -F vermagic "$manual/iomemory-vsl.ko" | awk '{print $1}')" = "$second"
+          python3 tools/driver_preflight.py --candidate-module "$manual/iomemory-vsl.ko" \
+            --target-kernel "$second" --expected-version "$version" \
+            --source-revision "$(git rev-parse HEAD)" \
+            > build-evidence/artifact-preflight.json
+      - name: Collect build evidence, including failures
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build-evidence
+          if test -d /var/lib/dkms/iomemory-vsl; then
+            sudo find /var/lib/dkms/iomemory-vsl -type f \( -name make.log -o -name kfio_config.h -o -name .objtool-link-args -o -name Module.symvers \) \
+              -exec cp --parents -t "$GITHUB_WORKSPACE/build-evidence" {} +
+            sudo chown -R "$(id -u):$(id -g)" build-evidence
+          fi
+          manual="$RUNNER_TEMP/iomemory-manual"
+          if test -d "$manual"; then
+            evidence="$GITHUB_WORKSPACE/build-evidence/manual"
+            mkdir -p "$evidence"
+            for file in include/fio/port/linux/kfio_config.h .objtool-link-args .dkms-source-revision Module.symvers; do
+              if test -f "$manual/$file"; then cp "$manual/$file" "$evidence/$(basename "$file")"; fi
+            done
+            if test -d "$manual/.objtool-first-party"; then
+              cp -a "$manual/.objtool-first-party" "$evidence/"
+            fi
+            if test -f "$manual/iomemory-vsl.ko"; then
+              modinfo "$manual/iomemory-vsl.ko" > "$evidence/module.txt"
+              sha256sum "$manual/iomemory-vsl.ko" > "$evidence/module.sha256"
+            fi
+            find "$manual/kfio" -maxdepth 1 -type f -name '*.o' -exec sha256sum {} + > "$evidence/selected-core.sha256"
+          fi
+          # Reproducible source-only archive: no generated module, key or worktree files.
+          git archive --format=tar HEAD | gzip -n > build-evidence/source.tar.gz
+          sha256sum build-evidence/source.tar.gz > build-evidence/source-archive.sha256
+      - name: Retain exact-candidate build evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2, node24
+        with:
+          name: driver-build-evidence-${{ github.sha }}-${{ github.run_attempt }}
+          path: build-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30

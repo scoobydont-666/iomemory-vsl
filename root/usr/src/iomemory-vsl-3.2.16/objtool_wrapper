@@ -1,53 +1,67 @@
-#!/usr/bin/env bash
-#
-# objtool wrapper.
-#
-# task-15303: this script used to end in an unconditional `exit 0`, which
-# swallowed EVERY objtool failure. On 2026-08-04 that turned a hard build
-# failure into a module that installed cleanly and then panicked the kernel at
-# boot (jump_label BUG, see the objtool_perfile target in Makefile). Silence is
-# the bug: a build that cannot validate its output must say so.
-#
-# Kernel 7.x runs objtool once over the LINKED module object, which drags the
-# proprietary libkfio blob into scope. The blob contains code with no
-# symbol-table entry, so objtool legitimately cannot reason about it and emits
-# "unannotated intra-function call". That single failure mode is EXPECTED and
-# tolerated -- first-party objects are validated and jump-label-converted by the
-# per-file pass in the Makefile. Anything else is a real failure and is fatal.
+#!/bin/bash
+# Preserve Kbuild's argument boundaries and validation policy. The sole accepted
+# limitation is a known diagnostic for the linked module with the pinned core.
+# The mandatory per-file target validates/transforms every first-party object.
+set -u
+kernel_build=${objtree:-}
+[[ -n $kernel_build ]] || { echo 'objtool_wrapper: missing objtree' >&2; exit 1; }
+objtool=$kernel_build/tools/objtool/objtool
+[[ -x $objtool && $# -gt 0 ]] || { echo 'objtool_wrapper: missing objtool or arguments' >&2; exit 1; }
 
-KERNEL_BUILD=$objtree
-[ -z "$KERNEL_BUILD" ] && echo "we need KERNEL_BUILD set: $KERNEL_BUILD" && exit 1
-objtool="$KERNEL_BUILD/tools/objtool/objtool"
-
-args=$(echo "$*" | sed s/--werror//)
-if [ -z "$objtool" ]; then
-    echo "$(basename "$0"): No objtool?" 1>&2
-    exit 255;
+source_dir=${FUSION_DRIVER_DIR:-$PWD}
+module=${FIO_DRIVER_NAME:-iomemory-vsl}
+object=${!#}
+linked=0
+for arg in "$@"; do [[ $arg != --link ]] || linked=1; done
+expected_object=0
+if [[ $object == "$source_dir/$module.o" || ( $PWD == "$source_dir" && $object == "$module.o" ) ]]; then
+    expected_object=1
 fi
-[ "$DEBUG" != "" ] && echo "Running objtool $objtool $args"
+if (( linked && expected_object )); then
+    # NUL-delimited, never eval'd. Save exactly the kernel options, without the
+    # object operand, for the mandatory per-file transformation/validation pass.
+    printf '%s\0' "${@:1:$#-1}" > "$source_dir/.objtool-link-args" || exit 1
+fi
 
-out=$($objtool --sec-address $args 2>&1)
-rc=$?
-[ -n "$out" ] && echo "$out" 1>&2
-[ "$DEBUG" != "" ] && echo "objtool returned $rc"
+if output=$("$objtool" "$@" 2>&1); then rc=0; else rc=$?; fi
+[[ -z $output ]] || printf '%s\n' "$output" >&2
+if (( rc == 0 )); then
+    if (( linked && expected_object )); then
+        rm -f -- "$source_dir/.objtool-link-needs-perfile"
+    fi
+    exit 0
+fi
 
-[ $rc -eq 0 ] && exit 0
-
-# Tolerate ONLY the known libkfio blob limitation; fail loudly on anything else.
-if echo "$out" | grep -q "unannotated intra-function call"; then
-    unexpected=$(echo "$out" | grep -v "unannotated intra-function call" \
-                             | grep -iE "error|warning" | head -5)
-    if [ -z "$unexpected" ]; then
-        echo "objtool_wrapper: tolerated known libkfio blob limitation (task-15303);" \
-             "first-party objects are validated by the per-file pass" 1>&2
+major=$(cut -d. -f1 "$kernel_build/include/config/kernel.release" 2>/dev/null)
+blob=${KFIO_LIB:-}
+[[ $blob == /* ]] || blob=$source_dir/$blob
+# This pins the reviewed latest/cc63 bytes; it is not a provenance or license
+# claim. A changed/other binary needs review before receiving any exception.
+known_hash=61ee1425207b317c9c327c7c9080ab201fdd01625a6138d893abd63d42021a4d
+actual_hash=$(sha256sum "$blob" 2>/dev/null) || actual_hash=''
+if (( linked && expected_object )) && [[ $major =~ ^[0-9]+$ ]] && (( major >= 7 )) \
+        && [[ ${actual_hash%% *} == "$known_hash" && -n $output ]]; then
+    known_only=1
+    while IFS= read -r line; do
+        # objtool's warning format comes from tools/objtool/include/objtool/warn.h.
+        # No substring whitelist: every nonempty line must be this diagnostic.
+        [[ -n $line ]] || continue
+        if [[ $line == "$object: "* ]]; then
+            diagnostic=${line#"$object: "}
+        else
+            known_only=0
+            break
+        fi
+        if ! [[ $diagnostic =~ ^(error|warning):\ objtool:\ [[:alnum:]_.]+\+0x[[:xdigit:]]+(\ \([[:alnum:]_.]+\+0x[[:xdigit:]]+\))?:\ unannotated\ intra-function\ call$ ]]; then
+            known_only=0
+            break
+        fi
+    done <<< "$output"
+    if (( known_only )); then
+        touch "$source_dir/.objtool-link-needs-perfile" || exit 1
+        printf '%s\n' 'objtool_wrapper: pinned core has an unannotated call; whole-core validation remains unavailable' >&2
         exit 0
     fi
-    echo "objtool_wrapper: FATAL - objtool reported problems beyond the known" \
-         "blob limitation:" 1>&2
-    echo "$unexpected" 1>&2
-    exit $rc
 fi
-
-echo "objtool_wrapper: FATAL - objtool failed (rc=$rc) with no recognised" \
-     "blob limitation; refusing to produce an unvalidated module" 1>&2
-exit $rc
+printf 'objtool_wrapper: validation failed (exit %s); refusing unknown/first-party diagnostics\n' "$rc" >&2
+exit "$rc"

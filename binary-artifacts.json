@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "inventory_baseline": "13145f4abf6caa575c1dcb149925bef7a90e7f1f",
+  "scope": "Committed libkfio object variants and libvsl.so; not a complete dependency/firmware SBOM. Hashes pin reviewed bytes, not original vendor authenticity.",
+  "artifacts": [
+    {
+      "path": "root/usr/src/iomemory-vsl-3.2.16/kfio/x86_64_cc41_libkfio.o_shipped",
+      "sha256": "bcdf34e10dd812388e013a356485f0094480ea4ad6c2fb2d1460ba38dc86e18a",
+      "size_bytes": 1542872,
+      "elf": {
+        "bits": 64,
+        "byte_order": "little",
+        "type": 1,
+        "machine": 62
+      },
+      "vendor_signature_verified": false,
+      "license_review": "Existing repository notices retained. Supplied comparison snapshot 26ab52e contains unchanged inputs and no replacement core source or new source-release terms; release evidence remains unresolved.",
+      "source_present_in_reviewed_repository": false
+    },
+    {
+      "path": "root/usr/src/iomemory-vsl-3.2.16/kfio/x86_64_cc43_libkfio.o_shipped",
+      "sha256": "a2ceeb4892c6d68675d45beb7dab291ce3dfb7d1c30ed9473e5aef9297f0e3c3",
+      "size_bytes": 1597416,
+      "elf": {
+        "bits": 64,
+        "byte_order": "little",
+        "type": 1,
+        "machine": 62
+      },
+      "vendor_signature_verified": false,
+      "license_review": "Existing repository notices retained. Supplied comparison snapshot 26ab52e contains unchanged inputs and no replacement core source or new source-release terms; release evidence remains unresolved.",
+      "source_present_in_reviewed_repository": false
+    },
+    {
+      "path": "root/usr/src/iomemory-vsl-3.2.16/kfio/x86_64_cc44_libkfio.o_shipped",
+      "sha256": "49d53a0112b0f9421e922d69672935bbd476bca90175a0e6be7c9d3ebe87c3ed",
+      "size_bytes": 1580312,
+      "elf": {
+        "bits": 64,
+        "byte_order": "little",
+        "type": 1,
+        "machine": 62
+      },
+      "vendor_signature_verified": false,
+      "license_review": "Existing repository notices retained. Supplied comparison snapshot 26ab52e contains unchanged inputs and no replacement core source or new source-release terms; release evidence remains unresolved.",
+      "source_present_in_reviewed_repository": false
+    },
+    {
+      "path": "root/usr/src/iomemory-vsl-3.2.16/kfio/x86_64_cc48_libkfio.o_shipped",
+      "sha256": "b8a7e8416f931aa4c905e553ed9a062f84b19eeb13d19e266cc5c72e02289258",
+      "size_bytes": 1592592,
+      "elf": {
+        "bits": 64,
+        "byte_order": "little",
+        "type": 1,
+        "machine": 62
+      },
+      "vendor_signature_verified": false,
+      "license_review": "Existing repository notices retained. Supplied comparison snapshot 26ab52e contains unchanged inputs and no replacement core source or new source-release terms; release evidence remains unresolved.",
+      "source_present_in_reviewed_repository": false
+    },
+    {
+      "path": "root/usr/src/iomemory-vsl-3.2.16/kfio/x86_64_cc49_libkfio.o_shipped",
+      "sha256": "63c7a2fe12a7156624b5b730b1c124ddf16e8efb765e96ac885a98fe7df3ec0c",
+      "size_bytes": 1588536,
+      "elf": {
+        "bits": 64,
+        "byte_order": "little",
+        "type": 1,
+        "machine": 62
+      },
+      "vendor_signature_verified": false,
+      "license_review": "Existing repository notices retained. Supplied comparison snapshot 26ab52e contains unchanged inputs and no replacement core source or new source-release terms; release evidence remains unresolved.",
+      "source_present_in_reviewed_repository": false
+    },
+    {
+      "path": "root/usr/src/iomemory-vsl-3.2.16/kfio/x86_64_cc53_libkfio.o_shipped",
+      "sha256": "f9360d63fc096a8da7648e25c57267aed2a7f4cfbd7cb377a37d9e0e463bff36",
+      "size_bytes": 1634944,
+      "elf": {
+        "bits": 64,
+        "byte_order": "little",
+        "type": 1,
+        "machine": 62
+      },
+      "vendor_signature_verified": false,
+      "license_review": "Existing repository notices retained. Supplied comparison snapshot 26ab52e contains unchanged inputs and no replacement core source or new source-release terms; release evidence remains unresolved.",
+      "source_present_in_reviewed_repository": false
+    },
+    {
+      "path": "root/usr/src/iomemory-vsl-3.2.16/kfio/x86_64_cc54_libkfio.o_shipped",
+      "sha256": "4af71450b1ee0dccedde98f1f35e435ebed1ab9ccf1c944807184257f4c99bab",
+      "size_bytes": 1636464,
+      "elf": {
+        "bits": 64,
+        "byte_order": "little",
+        "type": 1,
+        "machine": 62
+      },
+      "vendor_signature_verified": false,
+      "license_review": "Existing repository notices retained. Supplied comparison snapshot 26ab52e contains unchanged inputs and no replacement core source or new source-release terms; release evidence remains unresolved.",
+      "source_present_in_reviewed_repository": false
+    },
+    {
+      "path": "root/usr/src/iomemory-vsl-3.2.16/kfio/x86_64_cc63_libkfio.o_shipped",
+      "sha256": "61ee1425207b317c9c327c7c9080ab201fdd01625a6138d893abd63d42021a4d",
+      "size_bytes": 1611544,
+      "elf": {
+        "bits": 64,
+        "byte_order": "little",
+        "type": 1,
+        "machine": 62
+      },
+      "vendor_signature_verified": false,
+      "license_review": "Existing repository notices retained. Supplied comparison snapshot 26ab52e contains unchanged inputs and no replacement core source or new source-release terms; release evidence remains unresolved.",
+      "source_present_in_reviewed_repository": false
+    },
+    {
+      "path": "root/usr/src/iomemory-vsl-3.2.16/kfio/x86_64_latest_libkfio.o_shipped",
+      "sha256": "61ee1425207b317c9c327c7c9080ab201fdd01625a6138d893abd63d42021a4d",
+      "size_bytes": 1611544,
+      "elf": {
+        "bits": 64,
+        "byte_order": "little",
+        "type": 1,
+        "machine": 62
+      },
+      "vendor_signature_verified": false,
+      "license_review": "Existing repository notices retained. Supplied comparison snapshot 26ab52e contains unchanged inputs and no replacement core source or new source-release terms; release evidence remains unresolved.",
+      "source_present_in_reviewed_repository": false
+    },
+    {
+      "path": "root/usr/lib/fio/libvsl.so",
+      "sha256": "0a57f8e2090841019c7e2cf1a6b5bb5ca61ba5a89be6c7cdac5236d68e7ee14d",
+      "size_bytes": 1056336,
+      "elf": {
+        "bits": 64,
+        "byte_order": "little",
+        "type": 3,
+        "machine": 62
+      },
+      "vendor_signature_verified": false,
+      "license_review": "Existing repository notices retained. Supplied comparison snapshot 26ab52e contains unchanged inputs and no replacement core source or new source-release terms; release evidence remains unresolved.",
+      "source_present_in_reviewed_repository": false
+    }
+  ]
+}

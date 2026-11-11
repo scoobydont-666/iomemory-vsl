@@ -119,7 +119,22 @@ KFIO_EXPORT_SYMBOL(kfio_strncmp);
 
 char *kfio_strncpy(char *dst, const char *src, fio_size_t n)
 {
-    return strncpy(dst, src, n);
+    fio_size_t copied;
+
+    /* Keep the closed core's strncpy ABI: bounded reads, zero padding, and
+     * no forced terminator when the source fills n bytes. Newer kernels no
+     * longer provide strncpy; strscpy has different truncation semantics. */
+    if (n == 0)
+    {
+        return dst;
+    }
+    copied = strnlen(src, n);
+    memcpy(dst, src, copied);
+    if (copied < n)
+    {
+        memset(dst + copied, 0, n - copied);
+    }
+    return dst;
 }
 KFIO_EXPORT_SYMBOL(kfio_strncpy);
 

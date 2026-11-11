@@ -1,135 +1,100 @@
-<br />
-<p align="center">
+# iomemory-vsl: legacy VSL3 Linux compatibility driver
 
-  <!-- <a href="https://github.com/snuf/iomemory-docs">
-    <img src="https://github.com/snuf/iomemory-docs/images/logo.png" alt="Logo" width="80" height="80">
-  </a> -->
+This fork maintains the Linux adapter around the legacy Fusion-io VSL3 core.
+The reviewed GitHub snapshot contains the core and `libvsl.so` as opaque binaries;
+that snapshot is not a complete source implementation of the storage stack. See
+[binary assurance](docs/binary-assurance.md) and the
+[security modernization record](docs/security-modernization-2026-11-11.md).
 
-  <h3 align="center"></h3>
+The driver is unsupported by its original vendor and can affect persistent
+storage. Use a reviewed immutable revision and qualify the exact kernel, card,
+firmware, DMA/IOMMU configuration, and recovery path before deployment.
 
-  <p align="center">
-    <a href="../../wiki">Wiki</a>
-    .
-    <a href="../../issues">Report Bug</a>
-    ·
-    <a href="../../issues">Request Feature</a>
-  </p>
-</p>
+## Support and release status
 
-# IOMemory-VSL (Driver version 3.x)
-This is an unsupported update of the original driver source for FusionIO cards. It comes with no warranty, it may cause DATA LOSS or CORRUPTION. It is designed for "VSL3" i.e. the first few generations of cards. Newer cards would require VSL4 (see below). You cannot use VSL4 on the older cards, and vice versa. 
+There is no blanket support promise for every Linux 5.x, 6.x, or 7.x kernel.
+The historical pre-review CI built and installed against Ubuntu
+`6.8.0-149-generic` and `7.0.0-42-generic`; it did not load the module or validate
+storage integrity. New source revisions require their own results.
+[Qualification](docs/qualification.md) defines the evidence needed for a release.
+`main` is a development branch, not an immutable qualified release.
 
-# IOMemory-VSL4 (Driver version 4.x)
-For the iomemory-vsl4 driver please go to the [iomemory-vsl4](https://github.com/RemixVSL/iomemory-vsl4) repo.
+This driver targets VSL3-generation hardware. VSL4 uses a different driver and
+is maintained separately at [RemixVSL/iomemory-vsl4](https://github.com/RemixVSL/iomemory-vsl4).
+Identify the card and OEM variant before choosing a driver; the upstream
+[part-number matrix](https://docs.google.com/spreadsheets/d/e/2PACX-1vQMd40liekOCeftUYQx6GeofHgjU5SSDT-jHWid03JCfswQxHAhVee3rW-04baqKg1qN2fp7wEzuFm6/pubhtml)
+is a reference, not a qualification result for this fork.
 
-# How to Identify your Fusion-io Card (including VSL version)
- Please refer to the [Fusion-io and OEM Part Numbers Matrix](https://docs.google.com/spreadsheets/d/e/2PACX-1vQMd40liekOCeftUYQx6GeofHgjU5SSDT-jHWid03JCfswQxHAhVee3rW-04baqKg1qN2fp7wEzuFm6/pubhtml).
+## Build and installation
 
-## Background
-Driver support for FusionIO cards had been lagging behind kernel releases, effectively making these cards an expensive paperweight when running a distribution like Ubuntu / Arch / Fedora / ProxMox which all supply newer kernels than supported by the original drivers.
+Install Git, Python 3, your distribution's build tools, DKMS, and matching
+headers for each intended kernel. Follow [DKMS.md](DKMS.md) for source identity,
+repeat installation, autoinstall, signing, initramfs, and rollback checks.
+Clone this fork and explicitly select the reviewed revision:
 
-## Releases
-We've abandoned the notion of releases, Generally `main` should be checked out. `main` is completely backwards compatible for all **5**, **6** and **7** kernels. The latest working tested kernel is **7.0.4**.
-
-## Important Note for newer Linux Kernels
-Starting with Linux kernel 5.4.0, significant changes to the kernel were made that require additional boot time kernel flags for this driver to work. These affect AMD CPUs starting with 5.4.0, and Intel CPUs after about kernel 5.8.0. 
-
-### Sure Erase Mode
-Kernels that have `CONFIG_HARDENED_USERCOPY` enabled will cause `fio-sure-erase` to fail with a [[BUG] Kernel memory overwrite attempt detected to SLUB object 'fusion_user_ll_request'](https://github.com/RemixVSL/iomemory-vsl/issues/115). For this reason the kernel module parameter `sure_erase_mode` has been added, which defaults 0.
-
-Loading the module with `sure_erase_mode=1` enables `sure_erase_mode`, and disables auto attach for the drive(s). Enabling `sure_erase_mode` allows `fio-sure-erase` to function as it should. After having done a `fio-sure-erase` the module should be unloaded and loaded as normal.
-
-An example of loading the module is `sudo insmod ./iomemory-vsl.ko sure_erase_mode=1`, make sure to unload the module prior to loading it. When `sure_erase_mode` is enabled a log message will appear in dmesg that states `fioinf sure_erase_mode enabled, disabling auto_attach`. Besides this one off message a message will be generated for every time the criteria are met that break `fio-sure-erase`.
-
-Though only the control channel is impacted by this change it is advisable to not run the module in `fio_sure_erase` mode permanently, but only with the goal of running `fio-sure-erase`.
-
-### Grub
-When using grub as your boot loader, add the following to your /etc/default/grub by looking for `GRUB_CMDLINE_LINUX_DEFAULT=""` and adding additional parameters inside the quotes.
-
-For AMD systems:
-```
-amd_iommu=on iommu=pt
-```
-For Intel system:
-```
-iommu=pt
-```
-
-Example:
-```GRUB_CMDLINE_LINUX_DEFAULT="quiet iommu=pt"```
-
-### Systemd-boot
-When using `systemd-boot` add the above options to the `options` section of the `.conf` file you're using as your loader. Typically the loader root will be `/EFI`, `/efi`, or `/boot`. Which will have a `loader/entries/` directory that contains your specific configuration files. Use your favourite editor. More information on `systemd-boot` can be found [here](https://wiki.archlinux.org/title/systemd-boot#Adding_loaders).
-
-## Versions
-The driver is derived from the original `iomemory-vsl-3.2.16.1732`, but has several fixes and gone through rigorous cleaning of redundant unused and old code. Active development is done on branches and merged back to `main` (formerly master) when stable.
-
-The modified source fixes several known bugs in the driver:
-- silent IO drops
-- crashes during driver unload
-- SCSI queue settings
-- BIO status handling
-
-## Important note!!!
-PRs and commits to `main` have gone through testing with Flexible I/O Tester. Testing for page_cache errors, and generic FIO checksumming on read and write and different block sizes. Non `main` branches are often in process of verification and under active development, and guaranteed not stable.
-
-## Building
-Note! For many systems, **the best option is to use DKMS**, using the [instructions below](https://github.com/RemixVSL/iomemory-vsl/blob/main/README.md#dkms). If you prefer to build the module directly, or to create a `dpkg` or `rpm` package, you can proceed with these options below. 
-
-Please make sure that the required dependencies are installed, as mentioned in this [README](https://github.com/RemixVSL/iomemory-vsl/blob/main/README)
-
-## Installation
-DKMS is recommended, but installation can also be done with packages or from source.
-
-### DKMS
-Dynamic Kernel Module Support automates away the requirement of having to repackage the kernel module with every kernel and headers update that takes place on the system. This mechanism also makes sure that the driver for the new kernel actually works, or if the source needs refreshing.
-
-Try building from `main` first as it works with most modern kernels:
-```
-git clone https://github.com/RemixVSL/iomemory-vsl
-cd iomemory-vsl/
-sudo make dkms
-```
-
-If you know you need to build a specific branch based on a specific recommendation, use:
-```
-git clone https://github.com/RemixVSL/iomemory-vsl
-cd iomemory-vsl/
-# OPTIONAL: Checkout a specific release. Usually using main branch is correct.
-# DO THIS ONLY IF YOU'VE BEEN TOLD IT'S REQUIRED!
-git checkout <release-tag>
-sudo make dkms
-```
-
-### Source
-```
-git clone https://github.com/RemixVSL/iomemory-vsl
-cd iomemory-vsl/
-# OPTIONAL: Checkout a specific release. Usually using main branch is correct.
-# DO THIS ONLY IF YOU'VE BEEN TOLD IT'S REQUIRED!
-# git checkout <release-tag>
-make module
-sudo insmod root/usr/src/iomemory-vsl-3.2.16/iomemory-vsl.ko
-```
-### .deb Ubuntu / Debian
-```
-git clone https://github.com/RemixVSL/iomemory-vsl
+```sh
+git clone https://github.com/scoobydont-666/iomemory-vsl.git
 cd iomemory-vsl
-# OPTIONAL: Checkout a specific release. Usually using main branch is correct.
-# DO THIS ONLY IF YOU'VE BEEN TOLD IT'S REQUIRED!
-# git checkout <release-tag>
-make dpkg
+git checkout --detach REVIEWED_COMMIT_SHA
+python3 tools/verify_binary_artifacts.py
+python3 -m unittest discover -s tests -p 'test_*.py' -v
+sudo make dkms KERNELVER=YOUR_TARGET_KERNEL_RELEASE
 ```
 
-### .rpm CentOS / RHEL
-```
-git clone https://github.com/RemixVSL/iomemory-vsl
-cd iomemory-vsl/
-# OPTIONAL: Checkout a specific release. Usually using main branch is correct.
-# DO THIS ONLY IF YOU'VE BEEN TOLD IT'S REQUIRED!
-# git checkout <release-tag>
+Replace both placeholders with the revision and installed target kernel being
+qualified. DKMS builds and installs a module for kernel updates; it does not
+prove module loading, attachment, persistence, or boot recovery. The maintained
+installer retains older versions and does not issue device-format, erase,
+module-load/unload, bootloader, or reboot commands.
+
+Manual and package builds use the same validated module path:
+
+```sh
+make module KERNELVER=YOUR_TARGET_KERNEL_RELEASE
+# Distribution packaging, with matching build dependencies installed:
+make dpkg
+# or:
 make rpm
 ```
+
+A successful command only establishes the checks that actually ran. Packaging
+routes require their own artifact/install qualification. Legacy
+`module_operations.sh -d` and the historical EFI installer are retired; use the
+maintained DKMS route. Historical [TrueNAS notes](TrueNAS.md) require separate
+validation against this fork and the target operating system.
+
+## DMA and IOMMU policy
+
+`dma32_clamp=1` remains the default, load-time policy for PCI DMA masks and
+coherent allocations. It preserves the compatibility workaround for hardware
+requiring 32-bit device-visible DMA addresses. `dma32_clamp=0` permits the core's
+requested mask; it does not relax the opaque core's generic allocation policy.
+Host-only scatter/gather metadata uses ordinary slab allocation.
+
+Keep IOMMU policy under the host's normal security and qualification process.
+There is no generic instruction to add `iommu=pt`: passthrough changes DMA
+isolation and cannot repair driver mapping/length/completion errors. Exercise
+translated IOMMU and the intended clamp setting on each supported platform.
+The coherent allocator preserves device NUMA topology and delegates zone
+fallback to the kernel DMA API.
+
+## Sure erase maintenance mode
+
+`sure_erase_mode` is load-only and accepts zero or one. Value one disables
+automatic attachment during initialization. Use it only in a controlled offline
+maintenance procedure with the correct card and utilities. The legacy core's
+length-based usercopy workaround remains a compatibility limitation; Linux
+usercopy protections remain active. This repository does not qualify firmware
+erase behavior or authorize destructive commands.
+
+## Verification
+
+Offline regression tests exercise production function bodies in bounded
+userspace fixtures and run installation/build helpers against controlled
+backends. GitHub Actions separately performs real kernel-header builds and DKMS
+lifecycle checks on ephemeral hosted runners. Neither lane accesses storage
+hardware. See [the qualification matrix](docs/qualification.md) for required
+fault, persistence, concurrency, signing, and reboot tests.
 
 # Utils
 The utilities to query and manage the drive(s) can be found in the [vsl_downloads](https://github.com/RemixVSL/vsl_downloads) repo.
@@ -194,8 +159,10 @@ vagrant@fio:~/iomemory-vsl/root/usr/src/iomemory-vsl-3.2.16$ dmesg | grep "ioDri
 See [this document](https://github.com/RemixVSL/iomemory-vsl/blob/main/TrueNAS.md) for information on how to install on TrueNAS. These steps were developed by a community contribution, and aren't generally tested with new versions of RemixVSL or TrueNAS.
 
 # How to Get Help
-- Open an issue in this Github repo
-- Join our Discord server at https://discord.gg/VxDvVy3EdS
+For security-sensitive findings, follow [SECURITY.md](SECURITY.md). For ordinary
+compatibility questions, use this fork's Discussions or issue tracker when enabled.
+The upstream community is available at https://discord.gg/VxDvVy3EdS; identify the
+fork and exact commit when asking for help. Repository features may be disabled.
 
 # Acknowledgements
 The support and maintenance of this driver is made possible by the people that actively contribute or contributed to its code base or by supporting the project in other ways.
@@ -225,4 +192,7 @@ Installing the fio-util, fio-common, fio-preinstall and fio-sysvinit are recomme
 When moving from source 2.3.11 to source 3.2.10 the firmware HAS TO BE UPDATED to 3.2.10.20150212. For the move to 3.2.15, and 3.2.16 from 3.2.10 we've not seen any issues.
 
 ## Firmware
-Though the newer the firmware often the better. If your card is not supported with the latest firmware drop by the Discord channel and someone might be able to help you.
+Select firmware by the exact card model/OEM identity and the vendor compatibility
+information available for that device. Record the running firmware in qualification
+evidence. A newer version number alone is not evidence of compatibility; firmware
+changes require their own tested maintenance and recovery procedure.

@@ -3,3 +3,7 @@ ioMemory-vsl*
 root/.vs
 **/license.c
 root/usr/src/iomemory-vsl-3.2.16/check_target_kernel.conf
+
+# Offline Python regression fixtures
+__pycache__/
+*.py[cod]

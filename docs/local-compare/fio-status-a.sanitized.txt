@@ -1,0 +1,184 @@
+
+Found 4 ioMemory devices in this system
+Driver version: 3.2.16 build 1731
+
+Adapter: ioMono
+	Fusion-io 825GB ioScale2, Product Number:F11-003-825G-CS-0001, SN:REDACTED-SERIAL-1, FIO SN:REDACTED-SERIAL-1
+	ioDrive2 Adapter Controller, PN:PA005004002
+	External Power: NOT connected
+	PCIe Bus voltage: avg 11.81V
+	PCIe Bus current: avg 0.72A
+	PCIe Bus power: avg 8.44W
+	PCIe Power limit threshold: 24.75W
+	PCIe slot available power: 75.00W
+	PCIe negotiated link: 4 lanes at 5.0 Gt/sec each, 2000.00 MBytes/sec total
+	Connected ioMemory modules:
+	  fct0:	Product Number:F11-003-825G-CS-0001, SN:REDACTED-SERIAL-1
+
+fct0	Attached
+	ioDrive2 Adapter Controller, Product Number:F11-003-825G-CS-0001, SN:REDACTED-SERIAL-1
+	ioDrive2 Adapter Controller, PN:PA005004002
+	SMP(AVR) Versions: App Version: 1.0.19.0, Boot Version: 1.0.5.1
+	Powerloss protection: protected
+	PCI:21:00.0
+	Vendor:1aed, Device:2001, Sub vendor:1aed, Sub device:2001
+	Firmware v7.1.17, rev 116786 Public
+	800.00 GBytes device size
+	Format: v500, 195312500 sectors of 4096 bytes
+	PCIe slot available power: 75.00W
+	PCIe negotiated link: 4 lanes at 5.0 Gt/sec each, 2000.00 MBytes/sec total
+	Internal temperature: 45.28 degC, max 55.12 degC
+	Internal voltage: avg 1.01V, max 1.02V
+	Aux voltage: avg 2.49V, max 2.49V
+	Reserve space status: Healthy; Reserves: 100.00%, warn at 10.00%
+	Active media: 100.00%
+	Rated PBW: 4.00 PB, 99.86% remaining
+	Lifetime data volumes:
+	   Physical bytes written: 5,560,312,731,120
+	   Physical bytes read   : 19,584,402,218,784
+	RAM usage:
+	   Current: 81,336,960 bytes
+	   Peak   : 830,868,608 bytes
+	Contained VSUs:
+	  fioa:	ID:0, UUID:REDACTED-UUID-1
+
+fioa	State: Online, Type: block device
+	ID:0, UUID:REDACTED-UUID-1
+	800.00 GBytes device size
+	Format: 195312500 sectors of 4096 bytes
+
+Adapter: ioMono
+	Fusion-io 825GB ioScale2, Product Number:F11-003-825G-CS-0001, SN:REDACTED-SERIAL-2, FIO SN:REDACTED-SERIAL-2
+	ioDrive2 Adapter Controller, PN:PA005004002
+	External Power: NOT connected
+	PCIe Bus voltage: avg 11.84V
+	PCIe Bus current: avg 0.71A
+	PCIe Bus power: avg 8.44W
+	PCIe Power limit threshold: 24.75W
+	PCIe slot available power: 75.00W
+	PCIe negotiated link: 4 lanes at 5.0 Gt/sec each, 2000.00 MBytes/sec total
+	Connected ioMemory modules:
+	  fct1:	Product Number:F11-003-825G-CS-0001, SN:REDACTED-SERIAL-2
+
+fct1	Attached
+	ioDrive2 Adapter Controller, Product Number:F11-003-825G-CS-0001, SN:REDACTED-SERIAL-2
+	ioDrive2 Adapter Controller, PN:PA005004002
+	SMP(AVR) Versions: App Version: 1.0.20.0, Boot Version: 1.0.5.1
+	Powerloss protection: protected
+	PCI:22:00.0
+	Vendor:1aed, Device:2001, Sub vendor:1aed, Sub device:2001
+	Firmware v7.1.17, rev 116786 Public
+	800.00 GBytes device size
+	Format: v500, 195312500 sectors of 4096 bytes
+	PCIe slot available power: 75.00W
+	PCIe negotiated link: 4 lanes at 5.0 Gt/sec each, 2000.00 MBytes/sec total
+	Internal temperature: 36.42 degC, max 42.82 degC
+	Internal voltage: avg 1.02V, max 1.02V
+	Aux voltage: avg 2.50V, max 2.51V
+	Reserve space status: Healthy; Reserves: 100.00%, warn at 10.00%
+	Active media: 100.00%
+	Rated PBW: 4.00 PB, 99.89% remaining
+	Lifetime data volumes:
+	   Physical bytes written: 4,340,256,298,136
+	   Physical bytes read   : 15,354,320,937,696
+	RAM usage:
+	   Current: 81,332,800 bytes
+	   Peak   : 830,868,608 bytes
+	Contained VSUs:
+	  fiob:	ID:0, UUID:REDACTED-UUID-2
+
+fiob	State: Online, Type: block device
+	ID:0, UUID:REDACTED-UUID-2
+	800.00 GBytes device size
+	Format: 195312500 sectors of 4096 bytes
+
+Adapter: ioMono
+	Fusion-io 825GB ioScale2, Product Number:F11-003-825G-CS-0001, SN:REDACTED-SERIAL-3, FIO SN:REDACTED-SERIAL-3
+	ioDrive2 Adapter Controller, PN:PA005004002
+	External Power: NOT connected
+	PCIe Bus voltage: avg 11.82V
+	PCIe Bus current: avg 0.76A
+	PCIe Bus power: avg 8.91W
+	PCIe Power limit threshold: 24.75W
+	PCIe slot available power: 75.00W
+	PCIe negotiated link: 4 lanes at 5.0 Gt/sec each, 2000.00 MBytes/sec total
+	Connected ioMemory modules:
+	  fct2:	Product Number:F11-003-825G-CS-0001, SN:REDACTED-SERIAL-3
+
+fct2	Attached
+	ioDrive2 Adapter Controller, Product Number:F11-003-825G-CS-0001, SN:REDACTED-SERIAL-3
+	ioDrive2 Adapter Controller, PN:PA005004002
+	SMP(AVR) Versions: App Version: 1.0.19.0, Boot Version: 1.0.5.1
+	Powerloss protection: protected
+	PCI:a1:00.0
+	Vendor:1aed, Device:2001, Sub vendor:1aed, Sub device:2001
+	Firmware v7.1.17, rev 116786 Public
+	800.00 GBytes device size
+	Format: v500, 195312500 sectors of 4096 bytes
+	PCIe slot available power: 75.00W
+	PCIe negotiated link: 4 lanes at 5.0 Gt/sec each, 2000.00 MBytes/sec total
+	Internal temperature: 42.82 degC, max 50.69 degC
+	Internal voltage: avg 1.01V, max 1.02V
+	Aux voltage: avg 2.50V, max 2.50V
+	Reserve space status: Healthy; Reserves: 100.00%, warn at 10.00%
+	Active media: 100.00%
+	Rated PBW: 4.00 PB, 99.86% remaining
+	Lifetime data volumes:
+	   Physical bytes written: 5,633,876,781,216
+	   Physical bytes read   : 19,584,462,855,672
+	RAM usage:
+	   Current: 81,257,920 bytes
+	   Peak   : 830,868,608 bytes
+	Contained VSUs:
+	  fioc:	ID:0, UUID:REDACTED-UUID-3
+
+fioc	State: Online, Type: block device
+	ID:0, UUID:REDACTED-UUID-3
+	800.00 GBytes device size
+	Format: 195312500 sectors of 4096 bytes
+
+Adapter: ioMono
+	Fusion-io 825GB ioScale2, Product Number:F11-003-825G-CS-0001, SN:REDACTED-SERIAL-4, FIO SN:REDACTED-SERIAL-4
+	ioDrive2 Adapter Controller, PN:PA005004002
+	External Power: NOT connected
+	PCIe Bus voltage: avg 11.84V
+	PCIe Bus current: avg 0.72A
+	PCIe Bus power: avg 8.59W
+	PCIe Power limit threshold: 24.75W
+	PCIe slot available power: 75.00W
+	PCIe negotiated link: 4 lanes at 5.0 Gt/sec each, 2000.00 MBytes/sec total
+	Connected ioMemory modules:
+	  fct3:	Product Number:F11-003-825G-CS-0001, SN:REDACTED-SERIAL-4
+
+fct3	Attached
+	ioDrive2 Adapter Controller, Product Number:F11-003-825G-CS-0001, SN:REDACTED-SERIAL-4
+	ioDrive2 Adapter Controller, PN:PA005004002
+	SMP(AVR) Versions: App Version: 1.0.19.0, Boot Version: 1.0.5.1
+	Powerloss protection: protected
+	PCI:81:00.0
+	Vendor:1aed, Device:2001, Sub vendor:1aed, Sub device:2001
+	Firmware v7.1.17, rev 116786 Public
+	800.00 GBytes device size
+	Format: v500, 195312500 sectors of 4096 bytes
+	PCIe slot available power: 75.00W
+	PCIe negotiated link: 4 lanes at 5.0 Gt/sec each, 2000.00 MBytes/sec total
+	Internal temperature: 45.77 degC, max 57.58 degC
+	Internal voltage: avg 1.02V, max 1.02V
+	Aux voltage: avg 2.50V, max 2.50V
+	Reserve space status: Healthy; Reserves: 100.00%, warn at 10.00%
+	Active media: 100.00%
+	Rated PBW: 4.00 PB, 99.86% remaining
+	Lifetime data volumes:
+	   Physical bytes written: 5,632,478,306,752
+	   Physical bytes read   : 19,567,489,103,136
+	RAM usage:
+	   Current: 81,274,560 bytes
+	   Peak   : 830,868,608 bytes
+	Contained VSUs:
+	  fiod:	ID:0, UUID:REDACTED-UUID-4
+
+fiod	State: Online, Type: block device
+	ID:0, UUID:REDACTED-UUID-4
+	800.00 GBytes device size
+	Format: 195312500 sectors of 4096 bytes
+

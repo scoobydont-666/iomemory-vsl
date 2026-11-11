@@ -307,12 +307,10 @@ KFIOC_X_VOID_ADD_DISK()
     local test_flag="$1"
     local test_code='
 #include <linux/blkdev.h>
-int kfioc_check_void_add_disk(void);
-int kfioc_check_void_add_disk(void)
-{
-  struct gendisk *gd = NULL;
-  return add_disk(gd)
-}
+/* Inspect the return type without relying on __must_check warnings. */
+typedef char kfioc_add_disk_returns_void[
+    __builtin_types_compatible_p(typeof(add_disk((struct gendisk *)0)), void)
+        ? 1 : -1];
 
 '
     kfioc_test "$test_code" "$test_flag" 1 -Werror
@@ -662,13 +660,14 @@ KERNEL_SRC := ${KERNELDIR}
 ifneq (\$(KERNELRELEASE),)
 
 obj-m := kfioc_test.o
+ccflags-y += -Wall ${extra_cflags}
 
 else
 
 all: modules
 
 modules clean:
-	\$(MAKE) -C \$(KERNEL_SRC) M=\$(CURDIR) EXTRA_CFLAGS='-Wall ${extra_cflags}' \$@
+	\$(MAKE) -C \$(KERNEL_SRC) M=\$(CURDIR) \$@
 
 endif
 
@@ -862,7 +861,8 @@ MODULE_LICENSE(\"GPL\");
     echo "$license" >> "$test_dir/kfioc_test.c"
 
     if [ 1 -eq "$VERBOSE" ]; then
-        env -i PATH="${PATH}" make -C "$test_dir" V=1 2>&1 | tee "$test_dir/kfioc_test.log" || result=$?
+        # Logging must not turn a failed feature compile into a capability.
+        (set -o pipefail; env -i PATH="${PATH}" make -C "$test_dir" V=1 2>&1 | tee "$test_dir/kfioc_test.log") || result=$?
     else
         env -i PATH="${PATH}" make -C "$test_dir" V=1 >"$test_dir/kfioc_test.log" 2>&1 || result=$?
     fi

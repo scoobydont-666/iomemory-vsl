@@ -136,39 +136,60 @@ extern void fio_auto_attach_wait(void);
 extern void kfio_iodrive_sysrq_keys(void);
 extern void kfio_iodrive_unreg_sysrq_keys(void);
 
-/// @brief Driver initialization for parts that do not require cleanup if initialization fails.
-/// @note  The companion fio_do_exit() function may be called at any time, regardless of the
-///        status of fio_do_init(). However, on error, a call to fio_do_exit() is unnecessary
-///        because everything is automatically cleaned up.
+/* Undo only successfully initialized stages, in reverse dependency order. */
+static void fio_do_exit(void)
+{
+#if (FUSION_STATIC_KERNEL==0)
+    kfio_pci_unregister_driver();
+#endif
+    kfio_teardown_storage_interface();
+    cleanup_fio_blk();
+    cleanup_fio_obj();
+    cleanup_fio_iodrive();
+}
+
 static int fio_do_init(void)
 {
     int rc;
 
-    if (((rc = init_fio_iodrive()) != 0)
-        || ((rc = init_fio_obj()) != 0)
-        || ((rc = init_fio_blk()) != 0)
-        || ((rc = kfio_init_storage_interface()) != 0))
-    {
-        errprint("Failed to load " FIO_DRIVER_NAME " error %d: %s\n",
-                 rc, ifio_strerror(rc));
-
-        if (rc > 0)
-        {
-            rc = -rc; // follow convention of 0/-error
-        }
-
-        return rc;
-    }
+    rc = init_fio_iodrive();
+    if (rc != 0)
+        goto out;
+    rc = init_fio_obj();
+    if (rc != 0)
+        goto cleanup_iodrive;
+    rc = init_fio_blk();
+    if (rc != 0)
+        goto cleanup_obj;
+    rc = kfio_init_storage_interface();
+    if (rc != 0)
+        goto cleanup_blk;
 
 #if (FUSION_STATIC_KERNEL==0)
-    if (0 >= kfio_pci_register_driver()) // >0 => success
+    rc = kfio_pci_register_driver(); /* Adapter returns > 0 on success. */
+    if (rc <= 0)
     {
-        kfio_pci_unregister_driver();
-        rc = -ENODEV;
+        if (rc == 0)
+            rc = -ENODEV;
+        goto cleanup_storage;
     }
 #endif
+    return 0;
 
-    return rc;
+#if (FUSION_STATIC_KERNEL==0)
+cleanup_storage:
+    kfio_teardown_storage_interface();
+#endif
+cleanup_blk:
+    cleanup_fio_blk();
+cleanup_obj:
+    cleanup_fio_obj();
+cleanup_iodrive:
+    cleanup_fio_iodrive();
+out:
+    errprint("Failed to load " FIO_DRIVER_NAME " error %d: %s\n",
+             rc, ifio_strerror(rc));
+    return rc < 0 ? rc : -rc;
 }
 
 static int __init init_fio_driver(void)
@@ -179,15 +200,19 @@ static int __init init_fio_driver(void)
     auto_attach = 0;
 #endif
 
-    if(sure_erase_mode == 1)
+    /* Both settings determine lifetime/ownership decisions. They are load-only
+     * parameters; reject unsupported values before acquiring any resources. */
+    if ((sure_erase_mode != 0 && sure_erase_mode != 1) ||
+        use_workqueue < USE_QUEUE_NONE || use_workqueue > USE_QUEUE_SINGLE)
     {
-      infprint("sure_erase_mode enabled, disabling auto_attach\n");
-      auto_attach = 0;
+        errprint("Invalid sure_erase_mode or unsupported use_workqueue value\n");
+        return -EINVAL;
     }
 
-    if(use_workqueue == USE_QUEUE_RQ)
+    if (sure_erase_mode == 1)
     {
-        infprint("Using Linux I/O Scheduler\n");
+        infprint("sure_erase_mode enabled, disabling auto_attach\n");
+        auto_attach = 0;
     }
 
     /* If the LEB map isn't loaded then don't bother trying to auto attach */
@@ -196,40 +221,41 @@ static int __init init_fio_driver(void)
         auto_attach = 0;
     }
 
-    if ((rc = kfio_checkstructs()) ||
-        (rc = init_fio_dev()))
-    {
-        return 0;
-    }
+    rc = kfio_checkstructs();
+    if (rc != 0)
+        return rc < 0 ? rc : -rc;
+    rc = init_fio_dev();
+    if (rc != 0)
+        return rc < 0 ? rc : -rc;
 
-    /* Call swiss knife of all init functions. */
     rc = fio_do_init();
+    if (rc != 0)
+        goto cleanup_dev;
+
     fio_auto_attach_wait();
     kfio_iodrive_sysrq_keys();
 
-    if ((rc = dbgs_create_flags_dir(&_dbgset)))
+    rc = dbgs_create_flags_dir(&_dbgset);
+    if (rc != 0)
     {
         errprint("Failed to create debug flags directory %d: %s\n",
                  rc, ifio_strerror(rc));
+        kfio_iodrive_unreg_sysrq_keys();
+        fio_do_exit();
+        goto cleanup_dev;
     }
+    return 0;
 
-    return rc;
+cleanup_dev:
+    cleanup_fio_dev();
+    return rc < 0 ? rc : -rc;
 }
 
 void __exit exit_fio_driver(void)
 {
     dbgs_delete_flags_dir(&_dbgset);
     kfio_iodrive_unreg_sysrq_keys();
-
-    cleanup_fio_blk();
-    cleanup_fio_obj();
-
-    kfio_teardown_storage_interface();
-
-#if (FUSION_STATIC_KERNEL==0)
-    kfio_pci_unregister_driver();
-#endif
-    cleanup_fio_iodrive();
+    fio_do_exit();
     cleanup_fio_dev();
 }
 

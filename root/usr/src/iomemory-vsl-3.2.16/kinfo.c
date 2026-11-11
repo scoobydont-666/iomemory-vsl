@@ -28,6 +28,11 @@
 
 #include "port-internal.h"
 #include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/fs.h>
+#include <linux/slab.h>
+#include <linux/uaccess.h>
+#include <linux/err.h>
 
 #include <fio/port/fio-port.h>
 #include <fio/port/kinfo.h>
@@ -47,22 +52,13 @@ static fio_ssize_t fio_proc_read_buffer(const char *local_buf, fio_ssize_t len,
                                         char __user *user_buf, fio_size_t count,
                                         fio_loff_t *ppos)
 {
-    len -= *ppos;
-
-    if (len > count)
-        len = count;
-
-    if (len > 0)
+    if (len < 0)
     {
-        int result = kfio_copy_to_user(user_buf, local_buf + *ppos, len);
-
-        if (result == 0)
-            *ppos += len;
-        else
-            len = result;
+        return -EINVAL;
     }
 
-    return len;
+    /* Keep Linux position, partial-copy and EFAULT semantics at this boundary. */
+    return simple_read_from_buffer(user_buf, count, ppos, local_buf, len);
 }
 
 static fio_ssize_t kfio_info_os_type_read(fusion_file *file, char __user *buf,
@@ -162,116 +158,127 @@ static fio_ssize_t kfio_info_os_type_write(fusion_file *file, const char __user 
                                            fio_size_t count, fio_loff_t *ppos)
 {
     kfio_info_node_t *nodep;
-    kfio_info_val_t   value;
+    kfio_info_val_t value;
     fio_size_t size = 0;
-    char local_buf[32], *endp;
-    int  rc = -EINVAL;
+    char local_buf[32];
+    void *allocated = NULL;
+    int rc = -EINVAL;
+
+    if (*ppos < 0 || count > (fio_size_t)(LLONG_MAX - *ppos))
+    {
+        return -EINVAL;
+    }
 
     nodep = kfio_inode_data(kfio_fs_inode(file));
-
     value.type = kfio_info_node_get_type(nodep);
     value.size = kfio_info_node_get_size(nodep);
     value.data = local_buf;
 
     if (value.type == KFIO_INFO_STRING)
     {
+        /* Validate before allocating. Preserve the fixed-capacity core ABI,
+         * but zero-pad short values and require room for their terminator. */
+        if (value.size <= 0 || count > (fio_size_t)value.size)
+        {
+            return -EINVAL;
+        }
         if (value.size > sizeof(local_buf))
         {
             size = value.size;
-            value.data = kfio_vmalloc(size);
-            if (value.data == NULL)
+            allocated = kfio_vmalloc(size);
+            if (allocated == NULL)
             {
                 return -ENOMEM;
             }
+            value.data = allocated;
         }
-
-        if (count > value.size)
+        memset(value.data, 0, value.size);
+    }
+    else if (value.type == KFIO_INFO_UINT32 || value.type == KFIO_INFO_UINT64 ||
+             value.type == KFIO_INFO_INT32)
+    {
+        if (count == 0 || count >= sizeof(local_buf))
         {
             return -EINVAL;
         }
     }
     else
     {
-        if (count > sizeof(local_buf))
-        {
-            return -EINVAL;
-        }
+        return -EINVAL;
     }
 
-    rc = kfio_copy_from_user(value.data, buf, count);
-    if (rc != 0)
+    /* These proc buffers are adapter-owned; use the Linux usercopy contract,
+     * independently of the opaque core's maintenance-mode copy workaround. */
+    if (copy_from_user(value.data, buf, count) != 0)
     {
-        if (value.data != local_buf)
-        {
-            kfio_vfree(value.data, size);
-        }
-        return rc;
+        rc = -EFAULT;
+        goto out;
     }
-
-    *ppos += count;
 
     if (value.type == KFIO_INFO_STRING)
     {
-        rc = kfio_info_generic_type_handler(nodep, KFIO_INFO_WRITE, NULL, &value);
-
-        if (value.data != local_buf)
+        if (((char *)value.data)[value.size - 1] != '\0')
         {
-            kfio_vfree(value.data, size);
+            rc = -EINVAL;
+            goto out;
         }
+        rc = kfio_info_generic_type_handler(nodep, KFIO_INFO_WRITE, NULL, &value);
     }
-
-    if (value.type == KFIO_INFO_UINT32)
+    else
     {
-        uint32_t val;
-
-        val = kfio_strtoul(local_buf, &endp, 10);
-
-        if (endp - local_buf < count - 1)
+        /* Embedded NULs must not hide trailing input from the parser. */
+        if (memchr(local_buf, '\0', count) != NULL)
         {
-            return -EINVAL;
+            rc = -EINVAL;
+            goto out;
         }
+        local_buf[count] = '\0';
 
-        value.data = &val;
+        if (value.type == KFIO_INFO_UINT32)
+        {
+            unsigned int val;
 
-        rc = kfio_info_generic_type_handler(nodep, KFIO_INFO_WRITE, NULL, &value);
+            rc = kstrtouint(local_buf, 10, &val);
+            if (rc != 0)
+                goto out;
+            value.data = &val;
+            value.size = sizeof(val);
+            rc = kfio_info_generic_type_handler(nodep, KFIO_INFO_WRITE, NULL, &value);
+        }
+        else if (value.type == KFIO_INFO_UINT64)
+        {
+            unsigned long long val;
+
+            rc = kstrtoull(local_buf, 10, &val);
+            if (rc != 0)
+                goto out;
+            value.data = &val;
+            value.size = sizeof(val);
+            rc = kfio_info_generic_type_handler(nodep, KFIO_INFO_WRITE, NULL, &value);
+        }
+        else
+        {
+            int val;
+
+            rc = kstrtoint(local_buf, 10, &val);
+            if (rc != 0)
+                goto out;
+            value.data = &val;
+            value.size = sizeof(val);
+            rc = kfio_info_generic_type_handler(nodep, KFIO_INFO_WRITE, NULL, &value);
+        }
     }
 
-    if (value.type == KFIO_INFO_UINT64)
+out:
+    if (allocated != NULL)
     {
-        uint64_t val;
-
-        val = kfio_strtoull(local_buf, &endp, 10);
-
-        if (endp - local_buf < count - 1)
-        {
-            return -EINVAL;
-        }
-
-        value.data = &val;
-
-        rc = kfio_info_generic_type_handler(nodep, KFIO_INFO_WRITE, NULL, &value);
+        kfio_vfree(allocated, size);
     }
-
-    if (value.type == KFIO_INFO_INT32)
-    {
-        int val;
-
-        val = (int)kfio_strtol(local_buf, &endp, 10);
-
-        if (endp - local_buf < count - 1)
-        {
-            return -EINVAL;
-        }
-
-        value.data = &val;
-
-        rc = kfio_info_generic_type_handler(nodep, KFIO_INFO_WRITE, NULL, &value);
-    }
-
     if (rc != 0)
     {
-        return -EIO;
+        return rc < 0 ? rc : -EIO;
     }
+    *ppos += count;
     return count;
 }
 
@@ -318,79 +325,103 @@ static int kfio_info_text_release(fusion_inode *inode, fusion_file *file)
     return kfio_single_release(inode, file);
 }
 
+/* The node and an optional iteration handle have different lifetimes. Keep
+ * both in an adapter-owned per-open context, including failed start paths. */
+struct kfio_info_seq_context
+{
+    kfio_info_node_t *node;
+    kfio_info_data_t *dbh;
+};
+
 static void *kfio_info_linux_seq_start(fusion_seq_file *sfile, fio_loff_t *pos)
 {
-    kfio_info_node_t *nodep = kfio_fseq_private(sfile);
-    kfio_info_data_t *dbh;
-    char             *buf;
-    fio_size_t        size;
-    int               rc;
+    struct kfio_info_seq_context *ctx = kfio_fseq_private(sfile);
+    char *buf;
+    fio_size_t size;
+    int rc;
 
     size = kfio_seq_get_buf(sfile, &buf);
-
-    rc = kfio_info_alloc_data_handle(nodep, buf, size, &dbh);
+    rc = kfio_info_alloc_data_handle(ctx->node, buf, size, &ctx->dbh);
     if (rc != 0)
     {
-        return NULL;
+        ctx->dbh = NULL;
+        return ERR_PTR(rc < 0 ? rc : -rc);
     }
-    kfio_fseq_set_private(sfile, dbh);
-
-    return kfio_info_seq_init(nodep, pos, dbh);
+    return kfio_info_seq_init(ctx->node, pos, ctx->dbh);
 }
 
 static void *kfio_info_linux_seq_next(fusion_seq_file *sfile, void *cookie, fio_loff_t *pos)
 {
-    kfio_info_data_t *dbh   = kfio_fseq_private(sfile);
-    kfio_info_node_t *nodep = kfio_info_data_node(dbh);
+    struct kfio_info_seq_context *ctx = kfio_fseq_private(sfile);
 
-    return kfio_info_seq_next(nodep, cookie, pos);
+    return kfio_info_seq_next(ctx->node, cookie, pos);
 }
 
 static void kfio_info_linux_seq_stop(fusion_seq_file *sfile, void *cookie)
 {
-    kfio_info_data_t *dbh   = kfio_fseq_private(sfile);
-    kfio_info_node_t *nodep = kfio_info_data_node(dbh);
+    struct kfio_info_seq_context *ctx = kfio_fseq_private(sfile);
 
-    kfio_info_seq_stop(nodep, cookie);
-    kfio_fseq_set_private(sfile, nodep);
-    kfio_info_free_data_handle(dbh);
+    if (ctx->dbh != NULL)
+    {
+        kfio_info_seq_stop(ctx->node, cookie);
+        kfio_info_free_data_handle(ctx->dbh);
+        ctx->dbh = NULL;
+    }
 }
 
 static int kfio_info_linux_seq_show(fusion_seq_file *sfile, void *cookie)
 {
-    kfio_info_data_t *dbh   = kfio_fseq_private(sfile);
-    kfio_info_node_t *nodep = kfio_info_data_node(dbh);
-    fio_size_t        size  = kfio_info_data_size_valid(dbh);
-    int               rc;
+    struct kfio_info_seq_context *ctx = kfio_fseq_private(sfile);
+    fio_size_t size = kfio_info_data_size_valid(ctx->dbh);
+    int rc;
 
-    rc = kfio_info_seq_show(nodep, cookie, dbh);
+    rc = kfio_info_seq_show(ctx->node, cookie, ctx->dbh);
     if (rc < 0)
     {
-        /* Propagate error to seq file. */
         kfio_seq_commit(sfile, rc);
     }
     else
     {
-        /* Just commit the data written. */
-        kfio_seq_commit(sfile, kfio_info_data_size_valid(dbh) - size);
+        kfio_seq_commit(sfile, kfio_info_data_size_valid(ctx->dbh) - size);
     }
     return rc;
 }
 
 static int kfio_info_seqf_open(fusion_inode *inode, fusion_file *file)
 {
+    struct kfio_info_seq_context *ctx;
     fusion_seq_file *sfile;
     int retval;
 
-    retval = kfio_seq_open(file, &kfio_info_linux_seq_ops);
-
-    if (retval == 0)
+    ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
+    if (ctx == NULL)
     {
-        sfile = kfio_fs_private_data(file);
-        kfio_fseq_set_private(sfile, kfio_inode_data(inode));
+        return -ENOMEM;
     }
+    ctx->node = kfio_inode_data(inode);
+    retval = kfio_seq_open(file, &kfio_info_linux_seq_ops);
+    if (retval != 0)
+    {
+        kfree(ctx);
+        return retval;
+    }
+    sfile = kfio_fs_private_data(file);
+    kfio_fseq_set_private(sfile, ctx);
+    return 0;
+}
 
-    return retval;
+static int kfio_info_seqf_release(fusion_inode *inode, fusion_file *file)
+{
+    fusion_seq_file *sfile = kfio_fs_private_data(file);
+    struct kfio_info_seq_context *ctx = kfio_fseq_private(sfile);
+
+    if (ctx->dbh != NULL)
+    {
+        kfio_info_free_data_handle(ctx->dbh);
+    }
+    kfree(ctx);
+    kfio_fseq_set_private(sfile, NULL);
+    return kfio_seq_release(inode, file);
 }
 
 /**
@@ -411,7 +442,7 @@ static void kfio_info_os_init(void)
     kfio_set_file_ops_open_handler   (&kfio_info_seqf_fops, kfio_info_seqf_open);
     kfio_set_file_ops_read_handler   (&kfio_info_seqf_fops, kfio_seq_read);
     kfio_set_file_ops_llseek_handler (&kfio_info_seqf_fops, kfio_seq_lseek);
-    kfio_set_file_ops_release_handler(&kfio_info_seqf_fops, kfio_seq_release);
+    kfio_set_file_ops_release_handler(&kfio_info_seqf_fops, kfio_info_seqf_release);
 
     kfio_set_file_ops_open_handler   (&kfio_info_text_fops, kfio_info_text_open);
     kfio_set_file_ops_read_handler   (&kfio_info_text_fops, kfio_seq_read);

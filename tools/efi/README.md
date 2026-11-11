@@ -1,29 +1,16 @@
-# EFI Boot
-* NOT ALL VSL DRIVES SUPPORT UEFI, VSL4 DRIVES DO,
-check your device documentation and firmware to make sure yours does.
+# EFI boot qualification
 
-> snippet from <b>lspci -nnnvvv</b>
->
-> 04:00.0 Mass storage controller [0180]: SanDisk ioDrive2 [1aed:2001] (rev 04)<br>
->	Subsystem: SanDisk ioDrive2 [1aed:2001]
+The unattended `install-ubuntu.sh` route is retired. The retained command exits
+with an error before installing software, loading a module, editing filesystems,
+or changing boot configuration.
 
-Booting from a Fusion-IO device comes with its own challenges. Firstly
-making sure the device supports the EFI boot ROM, and secondly installing
-the module, and in the case of Linux making the module available to initramfs
-when installing the OS so it will actually boot.
+Use a reviewed source revision and the maintained [DKMS procedure](../../DKMS.md)
+for module installation. A successful DKMS build/install does not qualify booting
+from the card. Boot support requires evidence for the exact card and firmware,
+target kernel, module signature policy, initramfs contents, stable filesystem
+identifiers, and a tested recovery path on isolated hardware.
 
-The script in this directory is meant to help achieve and document the
-EFI booting from a Fusion-IO device on a new install of Ubuntu.
-
-## install-ubuntu.sh
-Support for Ubuntu Desktop installation to a Fusion-IO drive as a boot drive.
-
-1) Make sure BIOS is set to UEFI boot mode
-2) Make sure FIO device has UEFI enabled
-3) Boot your Ubuntu Desktop install medium
-4) Choose "Try Ubuntu"
-5) Open a terminal
-6) `wget https://raw.githubusercontent.com/RemixVSL/iomemory-vsl/main/tools/efi/install-ubuntu.sh && bash install-ubuntu.sh`
-7) Follow the instructions from the terminal
-8) Proceed to install Ubuntu to the Fusion-IO drive
-9) DON'T REBOOT BEFORE THE SCRIPT FINISHES!!!
+Do not replace UUID-based filesystem references with discovery-order device
+paths. Keep an independently bootable recovery environment and the previous
+known-working kernel/module. This repository provides no unattended boot-device
+migration or firmware configuration procedure.
