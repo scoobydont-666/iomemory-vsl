@@ -42,7 +42,11 @@ typedef int irqreturn_t;
 #define FUSION_ALLOCATION_TRIPWIRE_TEST() do {} while (0)
 #define FUSION_PAGE_SHIFT 12
 #define FUSION_PAGE_SIZE (1UL << FUSION_PAGE_SHIFT)
+#ifdef TEST_LEGACY_ORDER
+#define MAX_ORDER 11U
+#else
 #define MAX_PAGE_ORDER 10U
+#endif
 
 #define GFP_KERNEL 0x01u
 #define GFP_NOIO   0x02u
@@ -88,6 +92,7 @@ static gfp_t g_last_coherent_gfp = 0;
 static int g_coherent_free_count = 0;
 static int g_pages_in_use = 0;
 static int g_last_page_node = -1;
+static int g_node_mutations = 0;
 
 #define errprint(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
 
@@ -96,13 +101,14 @@ static const char *pci_name(const struct pci_dev *pdev)
     return pdev ? pdev->name : "mock_pci";
 }
 
-static int dev_to_node(struct device *dev)
+static int __attribute__((unused)) dev_to_node(struct device *dev)
 {
     return dev->numa_node;
 }
 
-static void set_dev_node(struct device *dev, int node)
+static void __attribute__((unused)) set_dev_node(struct device *dev, int node)
 {
+    g_node_mutations++;
     dev->numa_node = node;
 }
 
@@ -161,7 +167,7 @@ static struct page *alloc_pages_node(int nid, gfp_t gfp_mask, unsigned int order
 {
     if (g_mock_fail_node_gt0 && nid > 0)
         return NULL;
-    if (order >= MAX_PAGE_ORDER)
+    if (order > 10U)
         return NULL;
     for (int i = 0; i < MAX_TRACKED_PAGES; i++) {
         if (!g_page_table[i].in_use) {
@@ -239,11 +245,12 @@ int main(void)
     assert(rc == -EIO);
     g_mock_mask_rc = 0;
 
-    /* 2. kfio_dma_alloc_coherent uses dma_alloc_coherent, routes node 1 -> node 0, restores node 1 */
+    /* 2. Preserve device topology while the DMA API handles zone fallback. */
     g_mock_next_dma_addr = 0x7ff00000ULL;
     v = kfio_dma_alloc_coherent(&pdev, 0x100000U, &dma_hdl);
     assert(v != NULL);
-    assert(g_last_coherent_alloc_node == 0);
+    assert(g_last_coherent_alloc_node == 1);
+    assert(g_node_mutations == 0);
     assert(pdev.dev.numa_node == 1);
     assert((g_last_coherent_gfp & __GFP_DMA32) != 0);
     assert(dma_hdl.phys_addr == 0x7ff00000ULL);
@@ -257,7 +264,7 @@ int main(void)
     assert(v == NULL);
     assert(g_coherent_free_count == 2);
 
-    /* 3b. dma32_clamp=0: full mask honoured, no ZONE_DMA32, no node-0 reroute, no 4 GiB refusal */
+    /* 3b. dma32_clamp=0: full mask honoured, no ZONE_DMA32 or 4 GiB refusal. */
     dma32_clamp = 0;
     rc = kfio_pci_set_dma_mask(&pdev, ~0ULL);
     assert(rc == 0);
@@ -287,6 +294,20 @@ int main(void)
     assert(g_pages_in_use == 1);
     kfio_free(p, 131072);
     assert(g_pages_in_use == 0);
+
+    /* 5. MAX_PAGE_ORDER is inclusive; legacy MAX_ORDER is exclusive. */
+    p = kfio_malloc((FUSION_PAGE_SIZE << 10U) - KFIO_DMA32_HDR_BYTES);
+    assert(p != NULL);
+    assert(g_pages_in_use == 1);
+    kfio_free(p, (FUSION_PAGE_SIZE << 10U) - KFIO_DMA32_HDR_BYTES);
+    assert(g_pages_in_use == 0);
+    assert(kfio_malloc((FUSION_PAGE_SIZE << 10U) - KFIO_DMA32_HDR_BYTES + 1) == NULL);
+
+    /* 6. Invalid coherent-allocation arguments do not allocate or mutate topology. */
+    assert(kfio_dma_alloc_coherent(NULL, 4096, &dma_hdl) == NULL);
+    assert(kfio_dma_alloc_coherent(&pdev, 0, &dma_hdl) == NULL);
+    assert(kfio_dma_alloc_coherent(&pdev, 4096, NULL) == NULL);
+    assert(g_node_mutations == 0);
 
     printf("ALL_ASSERTS_PASSED\n");
     return 0;
@@ -345,12 +366,16 @@ class Dma32AndKmemContractTests(unittest.TestCase):
             (tmp_path / "extracted_units.inc").write_text(extracted)
             (tmp_path / "harness.c").write_text(HARNESS_C)
             bin_path = tmp_path / "harness"
-            subprocess.run(
-                ["cc", "-std=gnu11", "-Wall", "-Wextra", "-Werror", "-O2", str(tmp_path / "harness.c"), "-o", str(bin_path)],
-                check=True,
-            )
-            res = subprocess.run([str(bin_path)], check=True, capture_output=True, text=True)
-            self.assertIn("ALL_ASSERTS_PASSED", res.stdout)
+            for flags in ([], ["-DTEST_LEGACY_ORDER"]):
+                with self.subTest(flags=flags):
+                    subprocess.run(
+                        ["cc", "-std=gnu11", "-Wall", "-Wextra", "-Werror", "-O2",
+                         *flags, str(tmp_path / "harness.c"), "-o", str(bin_path)],
+                        check=True,
+                    )
+                    res = subprocess.run([str(bin_path)], capture_output=True, text=True)
+                    self.assertEqual(res.returncode, 0, res.stderr)
+                    self.assertIn("ALL_ASSERTS_PASSED", res.stdout)
 
 
 if __name__ == "__main__":

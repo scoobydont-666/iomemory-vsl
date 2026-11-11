@@ -54,14 +54,15 @@
 #define KFIO_DMA32_HDR_BYTES 16UL
 
 #if defined(MAX_PAGE_ORDER)
-#define KFIO_MAX_PAGE_ORDER MAX_PAGE_ORDER
+#define KFIO_LAST_PAGE_ORDER MAX_PAGE_ORDER
 #elif defined(MAX_ORDER)
-#define KFIO_MAX_PAGE_ORDER MAX_ORDER
+#define KFIO_LAST_PAGE_ORDER (MAX_ORDER - 1U)
 #else
-#define KFIO_MAX_PAGE_ORDER 10U
+#define KFIO_LAST_PAGE_ORDER 9U
 #endif
 
-#define KFIO_DMA32_MAX_BYTES ((FUSION_PAGE_SIZE << (KFIO_MAX_PAGE_ORDER - 1U)) - KFIO_DMA32_HDR_BYTES)
+/* MAX_PAGE_ORDER is inclusive; the older MAX_ORDER is one past the last order. */
+#define KFIO_DMA32_MAX_BYTES ((FUSION_PAGE_SIZE << KFIO_LAST_PAGE_ORDER) - KFIO_DMA32_HDR_BYTES)
 
 struct kfio_dma32_alloc_hdr
 {
@@ -74,12 +75,14 @@ C_ASSERT(sizeof(struct kfio_dma32_alloc_hdr) == KFIO_DMA32_HDR_BYTES);
 
 static void *__kfio_malloc(fio_size_t size, gfp_t gfp, kfio_numa_node_t node)
 {
-    // This has been determined to be a place to put this injector agent, but there are compile problems.
-    // Apparently fio-port.ko cannot find the error_injection_agents.o file.
-    // task-10911: NUMA1 ioScale2 cards require DMA32 (<4GB) buffers. kmalloc ignores
-    // __GFP_DMA32 (no dma32 slab cache); the page allocator honors it. Allocate via
-    // alloc_pages_node(__GFP_DMA32) with overflow/order bounds checks and a 16-byte
-    // aligned header so the returned payload preserves 16-byte DMA alignment.
+    /*
+     * Preserve the legacy core's low-memory allocation policy until all opaque
+     * callers are classified. The PCI dma32_clamp parameter controls DMA masks
+     * and coherent allocations only. Host-only adapter metadata should use the
+     * Linux slab allocator directly, paired with kfree(), instead of this ABI.
+     * kmalloc ignores __GFP_DMA32, so core buffers require the page allocator.
+     * Keep the private 16-byte header and payload alignment unchanged.
+     */
     struct page *pg;
     struct kfio_dma32_alloc_hdr *hdr;
     unsigned int order;
@@ -105,7 +108,7 @@ static void *__kfio_malloc(fio_size_t size, gfp_t gfp, kfio_numa_node_t node)
     }
 
     order = get_order(total_bytes);
-    if (order >= KFIO_MAX_PAGE_ORDER)
+    if (order > KFIO_LAST_PAGE_ORDER)
     {
         return NULL;
     }
@@ -187,7 +190,7 @@ void noinline kfio_free(void *ptr, fio_size_t size)
     }
 
     hdr = (struct kfio_dma32_alloc_hdr *)((char *)ptr - KFIO_DMA32_HDR_BYTES);
-    if (hdr->magic != KFIO_DMA32_HDR_MAGIC || hdr->order >= KFIO_MAX_PAGE_ORDER)
+    if (hdr->magic != KFIO_DMA32_HDR_MAGIC || hdr->order > KFIO_LAST_PAGE_ORDER)
     {
         errprint("kfio_free: invalid header magic=0x%x order=%u for ptr=%p\n",
                  hdr->magic, hdr->order, ptr);

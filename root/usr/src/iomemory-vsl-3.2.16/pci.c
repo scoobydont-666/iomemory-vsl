@@ -598,18 +598,12 @@ void *kfio_pci_get_drvdata(kfio_pci_dev_t *pdev)
 void noinline *kfio_dma_alloc_coherent(kfio_pci_dev_t *pdev, unsigned int size,
                                        struct fusion_dma_t *dma_handle)
 {
-    /*
-     * Allocate genuine coherent DMA memory (do not substitute streaming page
-     * mappings for coherent rings) while ensuring the allocation lands in
-     * ZONE_DMA32 (<4 GiB) even when the PCIe root port is attached to a
-     * non-zero NUMA node whose local memory starts above 4 GiB.
-     */
+    /* Allocate genuine coherent memory and let the DMA API select its backing. */
     extern int dma32_clamp;
-    struct pci_dev *pci_dev = (struct pci_dev *)pdev;
-    struct device *dev = &pci_dev->dev;
+    struct pci_dev *pci_dev;
+    struct device *dev;
     dma_addr_t dma_addr = 0;
     void *vaddr;
-    int orig_node;
 
     FUSION_ALLOCATION_TRIPWIRE_TEST();
 
@@ -618,27 +612,19 @@ void noinline *kfio_dma_alloc_coherent(kfio_pci_dev_t *pdev, unsigned int size,
         return NULL;
     }
 
+    pci_dev = (struct pci_dev *)pdev;
+    dev = &pci_dev->dev;
     memset(dma_handle, 0, sizeof(*dma_handle));
 
     /*
-     * On multi-socket systems where socket > 0 has no ZONE_DMA32 pages,
-     * dma_direct_alloc() honors dev_to_node(dev) first. Temporarily route the
-     * coherent allocation through node 0 if the device is bound to a non-zero
-     * NUMA node so the kernel coherent allocator draws from node-0 ZONE_DMA32.
+     * A preferred node without DMA32 memory can fall back through the kernel's
+     * zonelists: __GFP_THISNODE is deliberately absent. Never temporarily change
+     * dev->numa_node; it is shared with concurrent allocations and other device
+     * users. The coherent mask constrains device-visible DMA addresses; physical
+     * backing and any IOMMU translation remain the DMA implementation's job.
      */
-    orig_node = dev_to_node(dev);
-    if (dma32_clamp && orig_node > 0 && node_online(0))
-    {
-        set_dev_node(dev, 0);
-    }
-
     vaddr = dma_alloc_coherent(dev, size, &dma_addr,
                                GFP_KERNEL | (dma32_clamp ? __GFP_DMA32 : 0) | __GFP_NOWARN);
-
-    if (dma32_clamp && orig_node > 0 && node_online(0))
-    {
-        set_dev_node(dev, orig_node);
-    }
 
     if (!vaddr)
     {
