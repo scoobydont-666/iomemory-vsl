@@ -212,10 +212,14 @@ class SourceEvidenceTests(unittest.TestCase):
         self.assertFalse(result["runtime_source_tree_unchanged_since_previous_candidate"])
         self.assertFalse(result["release_qualified"])
 
-    def test_list_commits_has_only_full_unique_ids(self):
+    def test_list_commits_full_ids_and_reader_forbids_transport(self):
         result = subprocess.run(["python3", str(TOOL), "--repo", str(self.repo), "--list-commits"],
                                 capture_output=True, text=True, check=True)
         self.assertEqual(result.stdout.splitlines(), sorted(set(self.index["commits"].values())))
+        reader = module.Git(self.repo)
+        self.assertEqual(reader.env["GIT_NO_LAZY_FETCH"], "1")
+        with self.assertRaisesRegex(module.EvidenceError, "transport .* not allowed"):
+            reader.run("fetch", self.repo.as_uri(), "HEAD")
 
     def test_cli_verifies_committed_index_not_dirty_worktree(self):
         self.put(module.DEFAULT_INDEX, "not JSON")

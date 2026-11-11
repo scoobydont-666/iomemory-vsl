@@ -104,7 +104,8 @@ class Git:
         # Do not let replace refs or caller repository/index overrides alter receipts.
         self.env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
         self.env.update(GIT_NO_REPLACE_OBJECTS="1", GIT_OPTIONAL_LOCKS="0",
-                        GIT_TERMINAL_PROMPT="0", LC_ALL="C")
+                        GIT_TERMINAL_PROMPT="0", GIT_NO_LAZY_FETCH="1",
+                        GIT_ALLOW_PROTOCOL="", GIT_LITERAL_PATHSPECS="1", LC_ALL="C")
 
     def run(self, *args: str) -> bytes:
         try:
