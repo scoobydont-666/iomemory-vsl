@@ -53,7 +53,10 @@ CCMINOR ?= $(shell echo __GNUC_MINOR__ | $(FIOCC) -E -xc - | tail -n 1)
 CCVER=$(CCMAJOR)$(CCMINOR)
 LAST_CCVER := $(shell ls -1 kfio | sed -n 's/.*_cc\([0-9][0-9]*\)_.*/\1/p' | tail -1)
 # Get the tag and push it in here too.... if not too long...
-MODULE_VERSION ?= $(shell git rev-parse --short HEAD)
+# A source package has no Git metadata; its declared package version remains
+# available. Package builders and DKMS pass their exact version explicitly.
+MODULE_VERSION ?= $(shell git rev-parse --short HEAD 2>/dev/null || sed -n 's/^PACKAGE_VERSION=//p' dkms.conf)
+export MODULE_VERSION
 
 TARGET ?= $(FIOARCH)_cc$(CCMAJOR)$(CCMINOR)
 
@@ -63,66 +66,27 @@ KFIO_LIB_CMD ?= kfio/.$(TARGET)_libkfio.o.cmd
 
 NCPUS:=$(shell grep -c ^processor /proc/cpuinfo)
 
-all: fake_license modules patch_module_version
+# All supported entry points converge on the same validated module artifact.
+# Wrapper prerequisites run serially; the kernel submake supplies parallelism.
+.NOTPARALLEL:
+.PHONY: all gpl modules modules_install objtool_perfile fake_license
+all gpl objtool_perfile: modules
 
+include Kbuild.objects
+OBJTOOL := $(KERNEL_BUILD)/tools/objtool/objtool
+KREL_MAJOR = $(shell cut -d. -f1 $(KERNEL_BUILD)/include/config/kernel.release 2>/dev/null)
 
-# --- task-15303: per-file objtool pass -----------------------------------
-# Kernel 7.x runs objtool ONCE over the linked module object (--link) instead
-# of per-object-file as <=6.17 did. That single pass aborts on the proprietary
-# libkfio blob, which contains code regions with no symbol-table entry
-# ("unannotated intra-function call"). Because it aborts, --hacks=jump_label
-# never runs, so static-branch sites keep the compiler-emitted `jmp` instead of
-# being rewritten to a NOP. jump_label_init then rejects them at module load:
-#   kernel BUG at arch/x86/kernel/jump_label.c:73
-# Fix: run objtool per-file over OUR objects only (never the blob), exactly as
-# the 6.17 build did, then relink. Not a bypass: objtool still validates all
-# first-party code. Keep this list in sync with the -y entries in Kbuild.
-OBJTOOL       := $(KERNEL_BUILD)/tools/objtool/objtool
-OBJTOOL_FLAGS := --hacks=jump_label --hacks=noinstr --hacks=skylake --retpoline \
-                 --rethunk --sls --stackval --static-call --uaccess --prefix=16 --module
-PERFILE_OBJS  := license.o mod.o pci.o sysrq.o driver_init.o kfio.o errno.o \
-                 state.o kcache.o kfile.o kmem.o kfio_common.o kcpu.o kscatter.o \
-                 ktime.o sched.o cdev.o kscsi.o kscsi_host.o kblock.o kcondvar.o \
-                 kinfo.o kexports.o khotplug.o kcsr.o module_param.o
-
-# Kernels <= 6.x already run objtool per object inside kbuild; a second pass
-# re-emits __pfx_ symbols and the relink fails with duplicate definitions.
-KREL_MAJOR    := $(shell cut -d. -f1 $(KERNEL_BUILD)/include/config/kernel.release 2>/dev/null)
-
-objtool_perfile: modules
-	@if [ -z "$(KREL_MAJOR)" ]; then \
-	  echo "  cannot read $(KERNEL_BUILD)/include/config/kernel.release" >&2; exit 1; \
-	elif [ "$(KREL_MAJOR)" -lt 7 ]; then \
-	  echo "  OBJTOOL per-file: kernel $(KREL_MAJOR).x runs objtool per object in kbuild; not needed"; \
-	elif [ -x "$(OBJTOOL)" ]; then \
-	  echo "  OBJTOOL per-file (task-15303): $(words $(PERFILE_OBJS)) candidate objects"; \
-	  n=0; \
-	  for o in $(PERFILE_OBJS); do \
-	    if [ -f "$$o" ]; then \
-	      $(OBJTOOL) $(OBJTOOL_FLAGS) "$$o" || { echo "  OBJTOOL per-file: FATAL on $$o" >&2; exit 1; }; \
-	      n=$$((n+1)); \
-	    fi; \
-	  done; \
-	  echo "  OBJTOOL per-file: processed $$n objects; relinking"; \
-	  rm -f $(FIO_DRIVER_NAME).o $(FIO_DRIVER_NAME).ko $(FIO_DRIVER_NAME).mod.o; \
-	  $(MAKE) modules; \
-	else \
-	  echo "  OBJTOOL not found at $(OBJTOOL) -- per-file pass SKIPPED" >&2; \
-	  exit 1; \
-	fi
-
-gpl: fake_license objtool_perfile patch_module_version
-
-.PHONY: fake_license
+# The historic name is retained only to refuse metadata rewriting explicitly.
 fake_license:
-	sed -i 's/Proprietary/GPL/g' Kbuild
+	@echo 'fake_license is retired; module metadata does not license the proprietary core' >&2
+	@exit 1
 
 .PHONY: check_n_fix_kfio_ccver
 check_n_fix_kfio_ccver:
 	if [ ! -f "${KFIO_LIB}" ];then \
 		cp kfio/${LAST_KFIO_LIB} ${KFIO_LIB}; \
-	fi \
-	$(shell touch ${KFIO_LIB_CMD})
+	fi
+	touch "$(KFIO_LIB_CMD)"
 
 
 clean modules_clean:
@@ -132,11 +96,11 @@ clean modules_clean:
 		FIO_DRIVER_NAME=$(FIO_DRIVER_NAME) \
 		FUSION_DRIVER_DIR=$(shell pwd) \
 		M=$(shell pwd) \
-		ccflags-y+="$(CFLAGS)" \
-		EXTRA_CFLAGS+="$(CFLAGS)" \
+		FIO_CFLAGS="$(CFLAGS)" \
 		KFIO_LIB=$(KFIO_LIB) \
 		clean
-	rm -rf include/fio/port/linux/kfio_config.h kfio_config
+	rm -rf include/fio/port/linux/kfio_config.h kfio_config .objtool-first-party
+	rm -f .objtool-link-args .objtool-link-needs-perfile .objtool-relink-required
 
 include/fio/port/linux/kfio_config.h: kfio_config.sh
 	./$< -a $(FIOARCH) -o $@ -k $(KERNEL_BUILD) -p -d $(CURDIR)/kfio_config -l $(FUSION_DEBUG) -s $(KERNEL_SRC)
@@ -153,25 +117,16 @@ check_target_kernel:
 	fi
 
 .PHONY: add_module_version patch_module_version
-ifeq ($(FIO_DKMS_BUILD),1)
-# DKMS builds a copied source tree without .git. The installer records the
-# source version in dkms.conf; do not derive it from the running kernel or
-# rewrite the linked binary (DKMS may subsequently strip/sign that binary).
+# Every route generates metadata before linking. Never patch a linked/signed
+# module or an opaque core object. GPL remains the historical compatibility tag;
+# it is not a statement about the license of the proprietary core (see docs).
 add_module_version:
-	@printf '%s\n' '$(MODULE_VERSION)' | grep -Eq '^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$$'
-	@printf '#include "linux/module.h"\nMODULE_LICENSE("GPL");\nMODULE_VERSION("%s");\n' '$(MODULE_VERSION)' > license.c
+	@printf '%s\n' "$${MODULE_VERSION}" | grep -Eq '^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$$'
+	@printf '#include "linux/module.h"\nMODULE_LICENSE("GPL");\nMODULE_VERSION("%s");\n' "$${MODULE_VERSION}" > license.c.tmp
+	@cmp -s license.c.tmp license.c || mv -f license.c.tmp license.c
+	@rm -f license.c.tmp
 
-patch_module_version:
-	@:
-else
-add_module_version patch_module_version:
-	@ret="$$("$(shell pwd)"/module_operations.sh -n "$(FIO_DRIVER_NAME)" -v "$(MODULE_VERSION)")" ; \
-	if [ -n "$$ret" ] ; then \
-		echo "" ; \
-		echo ""$$ret"" ; \
-		echo "" ; \
-	fi
-endif
+patch_module_version: add_module_version
 
 .PHONY: dkms
 dkms:
@@ -189,20 +144,30 @@ rpm:
 	cd $(shell git rev-parse --show-toplevel) && \
 			$(MAKE) rpm
 
-modules modules_install: check_target_kernel check_n_fix_kfio_ccver include/fio/port/linux/kfio_config.h add_module_version
-	$(MAKE) \
-	-j$(NCPUS) \
-	-C $(KERNEL_BUILD) \
-	FIO_DRIVER_NAME=$(FIO_DRIVER_NAME) \
-	FUSION_DRIVER_DIR=$(shell pwd) \
-	M=$(shell pwd) \
-	EXTRA_CFLAGS+="$(CFLAGS)" \
-	ccflags-y+="$(CFLAGS)" \
-	INSTALL_MOD_DIR=$(FIO_DRIVER_SUBDIR) \
-	INSTALL_MOD_PATH=$(INSTALL_ROOT) \
-	KFIO_LIB=$(KFIO_LIB) \
-	objtool=$(shell pwd)/objtool_wrapper \
-	$@
+KERNEL_MAKE = $(MAKE) -j$(NCPUS) -C "$(KERNEL_BUILD)" \
+	FIO_DRIVER_NAME="$(FIO_DRIVER_NAME)" FUSION_DRIVER_DIR="$(CURDIR)" \
+	M="$(CURDIR)" FIO_CFLAGS="$(CFLAGS)" FIO_SCSI_DEVICE="$(FIO_SCSI_DEVICE)" \
+	INSTALL_MOD_DIR="$(FIO_DRIVER_SUBDIR)" INSTALL_MOD_PATH="$(INSTALL_ROOT)" \
+	KFIO_LIB="$(KFIO_LIB)" objtool="$(CURDIR)/objtool_wrapper"
+
+.PHONY: prepare_module
+prepare_module: check_target_kernel check_n_fix_kfio_ccver include/fio/port/linux/kfio_config.h add_module_version
+
+modules:
+	@set -eu; \
+	trap 'rm -f "$(FIO_DRIVER_NAME).ko"' EXIT HUP INT TERM; \
+	$(MAKE) prepare_module; \
+	$(KERNEL_MAKE) modules; \
+	bash ./objtool-perfile.sh "$(OBJTOOL)" "$(KREL_MAJOR)" $(FIO_PORT_OBJS); \
+	if test -f .objtool-relink-required; then \
+	    rm -f "$(FIO_DRIVER_NAME).o" "$(FIO_DRIVER_NAME).ko" "$(FIO_DRIVER_NAME).mod.o"; \
+	    $(KERNEL_MAKE) modules; \
+	    rm -f .objtool-relink-required; \
+	fi; \
+	trap - EXIT HUP INT TERM
+
+modules_install: modules
+	$(KERNEL_MAKE) modules_install
 
 endif
 

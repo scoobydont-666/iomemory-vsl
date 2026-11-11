@@ -1,0 +1,33 @@
+# Shared by Kbuild and the mandatory first-party objtool pass.
+FIO_PORT_OBJS := main.o
+FIO_PORT_OBJS += license.o
+FIO_PORT_OBJS += mod.o
+FIO_PORT_OBJS += pci.o
+FIO_PORT_OBJS += sysrq.o
+FIO_PORT_OBJS += driver_init.o
+FIO_PORT_OBJS += kfio.o
+FIO_PORT_OBJS += errno.o
+FIO_PORT_OBJS += state.o
+FIO_PORT_OBJS += kcache.o
+FIO_PORT_OBJS += kfile.o
+FIO_PORT_OBJS += kmem.o
+FIO_PORT_OBJS += kfio_common.o
+FIO_PORT_OBJS += kcpu.o
+FIO_PORT_OBJS += kscatter.o
+FIO_PORT_OBJS += ktime.o
+FIO_PORT_OBJS += sched.o
+FIO_PORT_OBJS += cdev.o
+
+ifeq ($(FIO_SCSI_DEVICE),True)
+FIO_PORT_OBJS += kscsi.o
+FIO_PORT_OBJS += kscsi_host.o
+else
+FIO_PORT_OBJS += kblock.o
+endif
+
+FIO_PORT_OBJS += kcondvar.o
+FIO_PORT_OBJS += kinfo.o
+FIO_PORT_OBJS += kexports.o
+FIO_PORT_OBJS += khotplug.o
+FIO_PORT_OBJS += kcsr.o
+FIO_PORT_OBJS += module_param.o

@@ -5,6 +5,7 @@ The fake DKMS backend runs the real Makefile's version-generation targets in
 an isolated, Git-free build copy. It does NOT compile/load the full driver.
 """
 import json
+import hashlib
 import os
 from pathlib import Path
 import shutil
@@ -67,7 +68,7 @@ class DkmsLifecycle(unittest.TestCase):
         self.repo = self.root/'checkout'
         self.src = self.repo/REL
         self.src.mkdir(parents=True)
-        for name in ('dkms.conf', 'dkms-install.sh', 'Makefile'):
+        for name in ('dkms.conf', 'dkms-install.sh', 'Makefile', 'Kbuild.objects'):
             shutil.copy2(ROOT/REL/name, self.src/name)
         (self.src/'Kbuild').write_text('# test fixture, not a kernel build\n')
         (self.src/'kfio').mkdir()
@@ -131,6 +132,16 @@ class DkmsLifecycle(unittest.TestCase):
         self.assertEqual(sum(x[0]=='build' for x in self.calls()), 1)
         self.assertEqual(sum(x[0]=='install' for x in self.calls()), 1)
         self.assertFalse(any(x[0]=='remove' or '--force' in x for x in self.calls()))
+
+    def test_library_upgrade_preserves_previous_bytes_for_rollback(self):
+        self.run_install()
+        old = (self.root/'lib/libvsl.so').read_bytes()
+        (self.repo/'root/usr/lib/fio/libvsl.so').write_bytes(b'updated library\n')
+        self.commit()
+        self.run_install()
+        backup = self.root/'state/libvsl-backups'/(hashlib.sha256(old).hexdigest()+'.so')
+        self.assertEqual(backup.read_bytes(), old)
+        self.assertEqual((self.root/'lib/libvsl.so').read_bytes(), b'updated library\n')
 
     def test_same_source_version_for_different_kernel(self):
         self.run_install('6.12.0-first')

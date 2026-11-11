@@ -10,7 +10,7 @@ kernel=${1:-$(uname -r)}
 kernel_build=${2:-/lib/modules/$kernel/build}
 [[ $kernel =~ ^[[:alnum:]][[:alnum:]_.+-]*$ ]] || fail 'invalid kernel release'
 [[ -f $kernel_build/Makefile ]] || fail "install headers for $kernel; missing $kernel_build/Makefile"
-for tool in git dkms tar flock mktemp install diff sed grep find readlink realpath; do
+for tool in git dkms tar flock mktemp install diff sed grep find readlink realpath sha256sum; do
     command -v "$tool" >/dev/null || fail "missing prerequisite: $tool"
 done
 
@@ -30,12 +30,17 @@ source_tree=${DKMS_SOURCE_TREE:-/usr/src}
 state_tree=${DKMS_STATE_TREE:-/var/lib/dkms}
 lib_dir=${DKMS_LIB_DIR:-/usr/lib/fio}
 [[ $source_tree = /* && $state_tree = /* && $lib_dir = /* ]] || fail 'installation directories must be absolute'
+if [[ $lib_dir == /usr/lib/fio ]]; then
+    command -v ldconfig >/dev/null || fail 'missing prerequisite: ldconfig'
+    git -C "$repo" cat-file -e "$revision:root/etc/ld.so.conf.d/fio.conf" || fail 'committed linker configuration is missing'
+fi
 install -d -m 0755 "$source_tree" "$state_tree" || fail 'cannot create DKMS directories; use sudo make dkms for system installation'
 # Serialize this installer's registration work; DKMS owns its own build lifecycle.
 exec 9>"$state_tree/.iomemory-vsl-install.lock"
 flock -x 9
 stage=$(mktemp -d "$source_tree/.iomemory-vsl-stage.XXXXXXXX")
-trap 'rm -rf -- "$stage"' EXIT
+lib_tmp=''
+trap 'rm -rf -- "$stage"; if [[ -n $lib_tmp ]]; then rm -f -- "$lib_tmp"; fi' EXIT
 mkdir "$stage/source"
 git -C "$repo" archive "$revision:${prefix%/}" | tar -x --no-same-owner -C "$stage/source"
 sed -i "s/^PACKAGE_VERSION=.*/PACKAGE_VERSION=$version/" "$stage/source/dkms.conf"
@@ -74,6 +79,25 @@ if ! grep -Eq ': installed$' <<< "$status"; then
 fi
 grep -Eq ': installed$' <<< "$status" || fail "DKMS did not report installed for $name/$version on $kernel: $status"
 install -d -m 0755 "$lib_dir"
-install -m 0755 "$stage/libvsl.so" "$lib_dir/libvsl.so"
+if [[ -e $lib_dir/libvsl.so ]]; then
+    # The userspace library is shared across kernel versions. Keep its prior
+    # bytes for an explicit rollback rather than silently losing them.
+    old_hash=$(sha256sum "$lib_dir/libvsl.so")
+    old_hash=${old_hash%% *}
+    install -d -m 0755 "$state_tree/libvsl-backups"
+    [[ -f $state_tree/libvsl-backups/$old_hash.so ]] || \
+        install -m 0755 "$lib_dir/libvsl.so" "$state_tree/libvsl-backups/$old_hash.so"
+fi
+lib_tmp=$(mktemp "$lib_dir/.libvsl.so.XXXXXXXX")
+install -m 0755 "$stage/libvsl.so" "$lib_tmp"
+mv -fT -- "$lib_tmp" "$lib_dir/libvsl.so"
+lib_tmp=''
+if [[ $lib_dir == /usr/lib/fio ]]; then
+    git -C "$repo" show "$revision:root/etc/ld.so.conf.d/fio.conf" > "$stage/fio.conf"
+    install -D -m 0644 "$stage/fio.conf" /etc/ld.so.conf.d/fio.conf
+    ldconfig
+else
+    printf 'Custom library directory %s: configure its loader search path separately.\n' "$lib_dir"
+fi
 printf 'Registered source: %s\nInstalled for kernel: %s\nSource commit: %s\n' "$name/$version" "$kernel" "$revision"
 printf 'Existing versions were retained. Verify DKMS autoinstall for the next kernel before rebooting.\n'

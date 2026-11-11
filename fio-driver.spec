@@ -69,6 +69,7 @@ if ! %{__make} \
         -C driver_source \
         KERNELVER=%{rpm_kernel_version} \
         FIO_DRIVER_NAME=%{fio_driver_name} \
+        MODULE_VERSION=%{fio_version} \
         FIO_SCSI_DEVICE=%{kfio_scsi_device} \
         %{firehose_shipped_object} \
         modules
@@ -219,13 +220,16 @@ Source to build driver for SanDisk Fusion ioMemory devices
 /usr/share/doc/fio/NOTICE.libvsl
 %config /etc/ld.so.conf.d/fio.conf
 /usr/src/iomemory-vsl-3.2.16/Kbuild
+/usr/src/iomemory-vsl-3.2.16/Kbuild.objects
 /usr/src/iomemory-vsl-3.2.16/Makefile
 /usr/src/iomemory-vsl-3.2.16/dkms.conf
+/usr/src/iomemory-vsl-3.2.16/dkms-install.sh
 /usr/src/iomemory-vsl-3.2.16/cdev.c
 /usr/src/iomemory-vsl-3.2.16/driver_init.c
 /usr/src/iomemory-vsl-3.2.16/check_target_kernel.sh
 /usr/src/iomemory-vsl-3.2.16/module_operations.sh
 /usr/src/iomemory-vsl-3.2.16/objtool_wrapper
+/usr/src/iomemory-vsl-3.2.16/objtool-perfile.sh
 %ghost /usr/src/iomemory-vsl-3.2.16/check_target_kernel.conf
 /usr/src/iomemory-vsl-3.2.16/errno.c
 %ghost /usr/src/iomemory-vsl-3.2.16/iomemory-vsl.ko
